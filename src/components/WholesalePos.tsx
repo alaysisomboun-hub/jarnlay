@@ -2,10 +2,12 @@ import React, { useState, useMemo } from 'react';
 import { usePos } from '../context/PosContext';
 import { Product, Customer, CartItem, SaleOrder, PaymentMethod } from '../types';
 import { ReceiptPrint } from './ReceiptPrint';
+import { BarcodeCameraScanner } from './BarcodeCameraScanner';
 import {
   Truck,
   User,
   Search,
+  Camera,
   Plus,
   Minus,
   Trash2,
@@ -60,6 +62,7 @@ export const WholesalePos: React.FC = () => {
 
   // Customer history drawer
   const [showHistoryDrawer, setShowHistoryDrawer] = useState<boolean>(false);
+  const [isCameraScannerOpen, setIsCameraScannerOpen] = useState<boolean>(false);
 
   // Active customer
   const customer = customers.find((c) => c.id === selectedCustomerId) || customers[0];
@@ -159,6 +162,22 @@ export const WholesalePos: React.FC = () => {
         wholesaleApplied: true,
       };
       setCart([...cart, newItem]);
+    }
+  };
+
+  const handleCameraScan = (code: string) => {
+    const cleanCode = code.trim();
+    if (!cleanCode) return;
+
+    const found = products.find(
+      (p) => p.barcode === cleanCode || p.code === cleanCode || p.units.some((u) => u.barcode === cleanCode)
+    );
+
+    if (found) {
+      const matchedUnit = found.units.find((u) => u.barcode === cleanCode);
+      addToWholesaleCart(found, matchedUnit?.name);
+    } else {
+      alert(`ບໍ່ພົບສິນຄ້າທີ່ມີບາໂຄດ: ${cleanCode}`);
     }
   };
 
@@ -398,15 +417,26 @@ export const WholesalePos: React.FC = () => {
         {/* Left: Product Selection for Wholesale (Cartons, Packs, Wholesale Rates) */}
         <div className="flex-1 flex flex-col bg-white rounded-2xl border border-slate-200/80 shadow-xs overflow-hidden">
           <div className="p-3.5 border-b border-slate-200/80 flex items-center justify-between gap-3 bg-slate-50/50">
-            <div className="relative flex-1">
-              <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-              <input
-                type="text"
-                placeholder="ຄົ້ນຫາສິນຄ້າຂາຍສົ່ງ (ຊື່, ລະຫັດ, ບາໂຄດ)..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-9 pr-3 py-1.5 text-xs bg-white border border-slate-200 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-indigo-500"
-              />
+            <div className="flex items-center gap-2 flex-1">
+              <div className="relative flex-1">
+                <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                <input
+                  type="text"
+                  placeholder="ຄົ້ນຫາສິນຄ້າຂາຍສົ່ງ (ຊື່, ລະຫັດ, ບາໂຄດ)..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="w-full pl-9 pr-3 py-1.5 text-xs bg-white border border-slate-200 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-indigo-500"
+                />
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsCameraScannerOpen(true)}
+                className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-bold flex items-center gap-1.5 shadow-xs transition-colors shrink-0 cursor-pointer"
+                title="ເປີດກ້ອງສະແກນບາໂຄດ"
+              >
+                <Camera className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">ກ້ອງສະແກນ</span>
+              </button>
             </div>
             <div className="flex items-center gap-2">
               <span className="text-xs text-slate-500">ຮູບແບບ:</span>
@@ -863,6 +893,15 @@ export const WholesalePos: React.FC = () => {
           }}
         />
       )}
+
+      {/* Barcode Camera Scanner Modal */}
+      <BarcodeCameraScanner
+        isOpen={isCameraScannerOpen}
+        onClose={() => setIsCameraScannerOpen(false)}
+        onScanSuccess={handleCameraScan}
+        title="ກ້ອງສະແກນບາໂຄດ (Wholesale Scanner)"
+        sampleBarcodes={products.slice(0, 6).map((p) => ({ code: p.barcode, name: p.name }))}
+      />
     </div>
   );
 };

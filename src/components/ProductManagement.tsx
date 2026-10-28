@@ -1,10 +1,12 @@
 import React, { useState, useMemo, useRef } from 'react';
 import { usePos } from '../context/PosContext';
 import { Product, UnitConversion, VolumePriceTier } from '../types';
+import { BarcodeCameraScanner } from './BarcodeCameraScanner';
 import {
   Package,
   Plus,
   Search,
+  Camera,
   Edit,
   Trash2,
   Download,
@@ -26,6 +28,8 @@ export const ProductManagement: React.FC = () => {
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingProductId, setEditingProductId] = useState<string | null>(null);
+  const [isCameraOpen, setIsCameraOpen] = useState(false);
+  const [cameraTarget, setCameraTarget] = useState<'search' | 'form'>('search');
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -333,15 +337,29 @@ export const ProductManagement: React.FC = () => {
 
       {/* Filter and Search Bar */}
       <div className="bg-white rounded-xl border border-slate-200/80 p-3 shadow-xs flex flex-col sm:flex-row items-center justify-between gap-3">
-        <div className="relative w-full sm:w-80">
-          <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-          <input
-            type="text"
-            placeholder="ຄົ້ນຫາຊື່ສິນຄ້າ, ລະຫັດ ຫຼື ບາໂຄດ..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-9 pr-3 py-1.5 text-xs border border-slate-200 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-emerald-500"
-          />
+        <div className="flex items-center gap-2 w-full sm:w-96">
+          <div className="relative flex-1">
+            <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+            <input
+              type="text"
+              placeholder="ຄົ້ນຫາຊື່ສິນຄ້າ, ລະຫັດ ຫຼື ບາໂຄດ..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full pl-9 pr-3 py-1.5 text-xs border border-slate-200 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-emerald-500"
+            />
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              setCameraTarget('search');
+              setIsCameraOpen(true);
+            }}
+            className="px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-lg flex items-center gap-1 cursor-pointer transition-colors"
+            title="ສະແກນບາໂຄດເພື່ອຄົ້ນຫາ"
+          >
+            <Camera className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">ກ້ອງສະແກນ</span>
+          </button>
         </div>
 
         <div className="flex items-center gap-1.5 overflow-x-auto w-full sm:w-auto scrollbar-none">
@@ -518,9 +536,22 @@ export const ProductManagement: React.FC = () => {
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">
-                    ລະຫັດບາໂຄດ
-                  </label>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="text-xs font-semibold text-slate-700">
+                      ລະຫັດບາໂຄດ
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setCameraTarget('form');
+                        setIsCameraOpen(true);
+                      }}
+                      className="text-[10px] text-indigo-600 hover:text-indigo-800 font-semibold flex items-center gap-1 cursor-pointer"
+                    >
+                      <Camera className="w-3 h-3" />
+                      <span>ສ່ອງກ້ອງ</span>
+                    </button>
+                  </div>
                   <input
                     type="text"
                     value={formData.barcode}
@@ -865,6 +896,26 @@ export const ProductManagement: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* Barcode Camera Scanner Modal */}
+      <BarcodeCameraScanner
+        isOpen={isCameraOpen}
+        onClose={() => setIsCameraOpen(false)}
+        onScanSuccess={(scannedCode) => {
+          if (cameraTarget === 'search') {
+            setSearchQuery(scannedCode);
+          } else {
+            setFormData((prev) => ({ ...prev, barcode: scannedCode }));
+          }
+          setIsCameraOpen(false);
+        }}
+        title={
+          cameraTarget === 'search'
+            ? 'ສະແກນບາໂຄດເພື່ອຄົ້ນຫາສິນຄ້າ'
+            : 'ສະແກນບາໂຄດໃສ່ຟອມສິນຄ້າ'
+        }
+        sampleBarcodes={products.slice(0, 6).map((p) => ({ code: p.barcode, name: p.name }))}
+      />
     </div>
   );
 };

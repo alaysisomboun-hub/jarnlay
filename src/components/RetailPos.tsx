@@ -2,9 +2,11 @@ import React, { useState, useMemo, useRef } from 'react';
 import { usePos } from '../context/PosContext';
 import { Product, CartItem, PaymentMethod, SaleOrder } from '../types';
 import { ReceiptPrint } from './ReceiptPrint';
+import { BarcodeCameraScanner } from './BarcodeCameraScanner';
 import {
   Search,
   Barcode,
+  Camera,
   Plus,
   Minus,
   Trash2,
@@ -46,6 +48,7 @@ export const RetailPos: React.FC = () => {
   const [splitTransfer, setSplitTransfer] = useState<number>(0);
   const [completedSale, setCompletedSale] = useState<SaleOrder | null>(null);
   const [barcodeInput, setBarcodeInput] = useState<string>('');
+  const [isCameraScannerOpen, setIsCameraScannerOpen] = useState<boolean>(false);
 
   const barcodeInputRef = useRef<HTMLInputElement>(null);
 
@@ -160,6 +163,23 @@ export const RetailPos: React.FC = () => {
       setBarcodeInput('');
     } else {
       alert(`ບໍ່ພົບສິນຄ້າທີ່ມີບາໂຄດ: ${code}`);
+    }
+  };
+
+  // Handle continuous camera barcode scan
+  const handleCameraScan = (code: string) => {
+    const cleanCode = code.trim();
+    if (!cleanCode) return;
+
+    const found = products.find(
+      (p) => p.barcode === cleanCode || p.code === cleanCode || p.units.some((u) => u.barcode === cleanCode)
+    );
+
+    if (found) {
+      const matchedUnit = found.units.find((u) => u.barcode === cleanCode);
+      addToCart(found, matchedUnit?.name);
+    } else {
+      alert(`ບໍ່ພົບສິນຄ້າໃນລະບົບ: ${cleanCode}`);
     }
   };
 
@@ -309,19 +329,31 @@ export const RetailPos: React.FC = () => {
       {/* LEFT COLUMN: Product Catalog (65%) */}
       <div className="flex-1 flex flex-col bg-white rounded-2xl border border-slate-200/80 shadow-xs overflow-hidden">
         {/* Top Search & Barcode Bar */}
-        <div className="p-4 border-b border-slate-200/80 flex flex-col sm:flex-row items-stretch sm:items-center gap-3 bg-slate-50/50">
-          {/* Barcode Fast Scan Input */}
-          <form onSubmit={handleBarcodeSubmit} className="relative sm:w-64">
-            <Barcode className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-            <input
-              ref={barcodeInputRef}
-              type="text"
-              placeholder="ສະແກນບາໂຄດ (Enter)..."
-              value={barcodeInput}
-              onChange={(e) => setBarcodeInput(e.target.value)}
-              className="w-full pl-9 pr-3 py-2 text-xs bg-white border border-slate-200 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-emerald-500 font-mono shadow-2xs"
-            />
-          </form>
+        <div className="p-4 border-b border-slate-200/80 flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 bg-slate-50/50">
+          {/* Barcode Fast Scan Input & Camera Trigger */}
+          <div className="flex items-center gap-2 sm:w-80">
+            <form onSubmit={handleBarcodeSubmit} className="relative flex-1">
+              <Barcode className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+              <input
+                ref={barcodeInputRef}
+                type="text"
+                placeholder="ສະແກນບາໂຄດ..."
+                value={barcodeInput}
+                onChange={(e) => setBarcodeInput(e.target.value)}
+                className="w-full pl-9 pr-3 py-2 text-xs bg-white border border-slate-200 rounded-xl focus:outline-hidden focus:ring-2 focus:ring-emerald-500 font-mono shadow-2xs"
+              />
+            </form>
+
+            <button
+              type="button"
+              onClick={() => setIsCameraScannerOpen(true)}
+              className="px-3 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-sm transition-all shrink-0 cursor-pointer"
+              title="ເປີດກ້ອງສະແກນບາໂຄດ"
+            >
+              <Camera className="w-4 h-4" />
+              <span className="hidden sm:inline">ກ້ອງສະແກນ</span>
+            </button>
+          </div>
 
           {/* Text Search */}
           <div className="relative flex-1">
@@ -331,7 +363,7 @@ export const RetailPos: React.FC = () => {
               placeholder="ຄົ້ນຫາຊື່ສິນຄ້າ, ລະຫັດສິນຄ້າ..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-9 pr-3 py-2 text-xs bg-white border border-slate-200 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-emerald-500 shadow-2xs"
+              className="w-full pl-9 pr-3 py-2 text-xs bg-white border border-slate-200 rounded-xl focus:outline-hidden focus:ring-2 focus:ring-emerald-500 shadow-2xs"
             />
             {searchQuery && (
               <button
@@ -346,19 +378,34 @@ export const RetailPos: React.FC = () => {
 
         {/* Categories Bar */}
         <div className="px-4 py-2.5 border-b border-slate-100 flex items-center gap-1.5 overflow-x-auto scrollbar-none bg-white">
-          {categories.map((cat) => (
-            <button
-              key={cat}
-              onClick={() => setSelectedCategory(cat)}
-              className={`px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap transition-colors cursor-pointer ${
-                selectedCategory === cat
-                  ? 'bg-slate-900 text-white shadow-xs'
-                  : 'text-slate-600 hover:bg-slate-100'
-              }`}
-            >
-              {cat === 'all' ? 'ທຸກໝວດໝູ່' : cat}
-            </button>
-          ))}
+          {categories.map((cat) => {
+            const count = cat === 'all'
+              ? products.length
+              : products.filter((p) => p.category === cat).length;
+
+            return (
+              <button
+                key={cat}
+                onClick={() => setSelectedCategory(cat)}
+                className={`px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all cursor-pointer flex items-center gap-1.5 ${
+                  selectedCategory === cat
+                    ? 'bg-slate-900 text-white shadow-xs'
+                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                }`}
+              >
+                <span>{cat === 'all' ? 'ທຸກໝວດໝູ່' : cat}</span>
+                <span
+                  className={`text-[10px] px-1.5 py-0.2 rounded-full ${
+                    selectedCategory === cat
+                      ? 'bg-slate-700 text-emerald-300'
+                      : 'bg-slate-200 text-slate-600'
+                  }`}
+                >
+                  {count}
+                </span>
+              </button>
+            );
+          })}
         </div>
 
         {/* Product Cards Grid */}
@@ -820,6 +867,15 @@ export const RetailPos: React.FC = () => {
           onClose={() => setCompletedSale(null)}
         />
       )}
+
+      {/* Barcode Camera Scanner Modal */}
+      <BarcodeCameraScanner
+        isOpen={isCameraScannerOpen}
+        onClose={() => setIsCameraScannerOpen(false)}
+        onScanSuccess={handleCameraScan}
+        title="ກ້ອງສະແກນບາໂຄດສິນຄ້າ (Retail Scanner)"
+        sampleBarcodes={products.slice(0, 6).map((p) => ({ code: p.barcode, name: p.name }))}
+      />
     </div>
   );
 };
