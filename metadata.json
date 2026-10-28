@@ -1,0 +1,6 @@
+{
+  "name": "LaoPOS Pro - ລະບົບຂາຍສົ່ງ & ຂາຍຍ່ອຍ",
+  "description": "ລະບົບ POS ສຳລັບທຸລະກິດຂາຍສົ່ງ ແລະ ຂາຍຍ່ອຍ ຄົບວົງຈອນ ພ້ອມຈັດການສະຕັອກ, ລູກຄ້າ, ຜູ້ສະໜອງ, ບັນຊີລາຍຮັບ-ລາຍຈ່າຍ ແລະ ລາຍງານການເງິນ",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
