@@ -3,6 +3,7 @@ import { usePos } from '../context/PosContext';
 import { Product, CartItem, PaymentMethod, SaleOrder } from '../types';
 import { ReceiptPrint } from './ReceiptPrint';
 import { BarcodeCameraScanner } from './BarcodeCameraScanner';
+import { getCategoryMeta } from '../lib/categories';
 import {
   Search,
   Barcode,
@@ -376,29 +377,34 @@ export const RetailPos: React.FC = () => {
           </div>
         </div>
 
-        {/* Categories Bar */}
-        <div className="px-4 py-2.5 border-b border-slate-100 flex items-center gap-1.5 overflow-x-auto scrollbar-none bg-white">
+        {/* Categories Visual Bar */}
+        <div className="px-4 py-2 border-b border-slate-100 flex items-center gap-2 overflow-x-auto scrollbar-none bg-slate-50/70">
           {categories.map((cat) => {
-            const count = cat === 'all'
-              ? products.length
-              : products.filter((p) => p.category === cat).length;
+            const count =
+              cat === 'all'
+                ? products.length
+                : products.filter((p) => p.category === cat).length;
+            const meta = getCategoryMeta(cat);
+            const Icon = meta.icon;
+            const isSelected = selectedCategory === cat;
 
             return (
               <button
                 key={cat}
                 onClick={() => setSelectedCategory(cat)}
-                className={`px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all cursor-pointer flex items-center gap-1.5 ${
-                  selectedCategory === cat
-                    ? 'bg-slate-900 text-white shadow-xs'
-                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                className={`px-3 py-2 rounded-xl text-xs font-semibold whitespace-nowrap transition-all cursor-pointer flex items-center gap-2 border ${
+                  isSelected
+                    ? meta.activeBgColor + ' border-transparent'
+                    : `${meta.bgColor} ${meta.borderColor} ${meta.color}`
                 }`}
               >
+                <Icon className={`w-3.5 h-3.5 ${isSelected ? 'text-white' : meta.color}`} />
                 <span>{cat === 'all' ? 'ທຸກໝວດໝູ່' : cat}</span>
                 <span
-                  className={`text-[10px] px-1.5 py-0.2 rounded-full ${
-                    selectedCategory === cat
-                      ? 'bg-slate-700 text-emerald-300'
-                      : 'bg-slate-200 text-slate-600'
+                  className={`text-[10px] font-bold px-1.5 py-0.2 rounded-full ${
+                    isSelected
+                      ? 'bg-white/20 text-white'
+                      : `${meta.badgeBg} ${meta.badgeText}`
                   }`}
                 >
                   {count}
@@ -413,13 +419,15 @@ export const RetailPos: React.FC = () => {
           {filteredProducts.length === 0 ? (
             <div className="col-span-full py-16 text-center text-slate-400">
               <ShoppingBag className="w-10 h-10 mx-auto text-slate-300 mb-2" />
-              <p className="text-sm font-medium">ບໍ່ພົບລາຍການສິນຄ້າ</p>
-              <p className="text-xs text-slate-400 mt-1">ລອງຄົ້ນຫາດ້ວຍຄຳສັບອື່ນ ຫຼື ສະແກນບາໂຄດໃໝ່</p>
+              <p className="text-sm font-medium">ບໍ່ພົບລາຍການສິນຄ້າໃນໝວດນີ້</p>
+              <p className="text-xs text-slate-400 mt-1">ລອງເລືອກ "ທຸກໝວດໝູ່" ຫຼື ສະແກນບາໂຄດໃໝ່</p>
             </div>
           ) : (
             filteredProducts.map((p) => {
               const isOutOfStock = p.stockQty <= 0;
               const isLowStock = p.stockQty > 0 && p.stockQty <= p.minStockAlert;
+              const catMeta = getCategoryMeta(p.category);
+              const CatIcon = catMeta.icon;
 
               return (
                 <div
@@ -456,6 +464,12 @@ export const RetailPos: React.FC = () => {
                       >
                         {isOutOfStock ? 'ໝົດ' : `${p.stockQty} ${p.baseUnit}`}
                       </span>
+                    </div>
+
+                    {/* Category Label for Easy Cashier Recognition */}
+                    <div className="flex items-center gap-1 mb-1 text-[10px] font-semibold">
+                      <CatIcon className={`w-3 h-3 ${catMeta.color} shrink-0`} />
+                      <span className={`${catMeta.color} truncate`}>{p.category}</span>
                     </div>
 
                     <h4 className="text-xs font-bold text-slate-900 line-clamp-2 leading-tight">

@@ -2,6 +2,7 @@ import React, { useState, useMemo, useRef } from 'react';
 import { usePos } from '../context/PosContext';
 import { Product, UnitConversion, VolumePriceTier } from '../types';
 import { BarcodeCameraScanner } from './BarcodeCameraScanner';
+import { getCategoryMeta, PRESET_CATEGORY_OPTIONS } from '../lib/categories';
 import {
   Package,
   Plus,
@@ -362,20 +363,40 @@ export const ProductManagement: React.FC = () => {
           </button>
         </div>
 
-        <div className="flex items-center gap-1.5 overflow-x-auto w-full sm:w-auto scrollbar-none">
-          {categories.map((cat) => (
-            <button
-              key={cat}
-              onClick={() => setSelectedCategory(cat)}
-              className={`px-3 py-1 rounded-lg text-xs font-medium whitespace-nowrap cursor-pointer transition-colors ${
-                selectedCategory === cat
-                  ? 'bg-slate-900 text-white'
-                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-              }`}
-            >
-              {cat === 'all' ? 'ທຸກໝວດໝູ່' : cat}
-            </button>
-          ))}
+        <div className="flex items-center gap-1.5 overflow-x-auto w-full sm:w-auto scrollbar-none py-1">
+          {categories.map((cat) => {
+            const count =
+              cat === 'all'
+                ? products.length
+                : products.filter((p) => p.category === cat).length;
+            const meta = getCategoryMeta(cat);
+            const Icon = meta.icon;
+            const isSelected = selectedCategory === cat;
+
+            return (
+              <button
+                key={cat}
+                onClick={() => setSelectedCategory(cat)}
+                className={`px-2.5 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap cursor-pointer transition-all flex items-center gap-1.5 border ${
+                  isSelected
+                    ? meta.activeBgColor + ' border-transparent'
+                    : `${meta.bgColor} ${meta.borderColor} ${meta.color}`
+                }`}
+              >
+                <Icon className={`w-3.5 h-3.5 ${isSelected ? 'text-white' : meta.color}`} />
+                <span>{cat === 'all' ? 'ທຸກໝວດໝູ່' : cat}</span>
+                <span
+                  className={`text-[10px] font-bold px-1.5 py-0.2 rounded-full ${
+                    isSelected
+                      ? 'bg-white/20 text-white'
+                      : `${meta.badgeBg} ${meta.badgeText}`
+                  }`}
+                >
+                  {count}
+                </span>
+              </button>
+            );
+          })}
         </div>
       </div>
 
@@ -429,7 +450,18 @@ export const ProductManagement: React.FC = () => {
                       </td>
 
                       <td className="px-4 py-3">
-                        <span className="text-slate-600 font-medium">{p.category}</span>
+                        {(() => {
+                          const catMeta = getCategoryMeta(p.category);
+                          const CatIcon = catMeta.icon;
+                          return (
+                            <span
+                              className={`inline-flex items-center gap-1.5 text-[11px] font-semibold px-2.5 py-1 rounded-full border ${catMeta.bgColor} ${catMeta.borderColor} ${catMeta.color}`}
+                            >
+                              <CatIcon className="w-3 h-3" />
+                              <span>{p.category}</span>
+                            </span>
+                          );
+                        })()}
                       </td>
 
                       {/* Units */}
@@ -561,14 +593,37 @@ export const ProductManagement: React.FC = () => {
                 </div>
                 <div>
                   <label className="block text-xs font-semibold text-slate-700 mb-1">
-                    ໝວດໝູ່
+                    ໝວດໝູ່ຜະລິດຕະພັນ *
                   </label>
+                  <div className="flex flex-wrap gap-1 mb-2">
+                    {PRESET_CATEGORY_OPTIONS.filter((c) => c !== 'ອື່ນໆ').map((preset) => {
+                      const meta = getCategoryMeta(preset);
+                      const Icon = meta.icon;
+                      const isChosen = formData.category === preset;
+                      return (
+                        <button
+                          key={preset}
+                          type="button"
+                          onClick={() => setFormData({ ...formData, category: preset })}
+                          className={`px-2 py-1 rounded-md text-[11px] font-medium flex items-center gap-1 transition-all cursor-pointer border ${
+                            isChosen
+                              ? meta.activeBgColor + ' border-transparent'
+                              : `${meta.bgColor} ${meta.borderColor} ${meta.color}`
+                          }`}
+                        >
+                          <Icon className={`w-3 h-3 ${isChosen ? 'text-white' : meta.color}`} />
+                          <span>{preset}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
                   <input
                     type="text"
+                    required
                     value={formData.category}
                     onChange={(e) => setFormData({ ...formData, category: e.target.value })}
-                    placeholder="ເຊັ່ນ: ເຄື່ອງດື່ມ, ອາຫານ"
-                    className="w-full text-xs px-3 py-2 border border-slate-300 rounded-lg"
+                    placeholder="ຫຼື ພິມໝວດໝູ່ກຳນົດເອງ..."
+                    className="w-full text-xs px-3 py-1.5 border border-slate-300 rounded-lg bg-slate-50/50 focus:bg-white"
                   />
                 </div>
               </div>

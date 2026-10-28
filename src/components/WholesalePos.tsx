@@ -3,6 +3,7 @@ import { usePos } from '../context/PosContext';
 import { Product, Customer, CartItem, SaleOrder, PaymentMethod } from '../types';
 import { ReceiptPrint } from './ReceiptPrint';
 import { BarcodeCameraScanner } from './BarcodeCameraScanner';
+import { getCategoryMeta } from '../lib/categories';
 import {
   Truck,
   User,
@@ -21,6 +22,7 @@ import {
   Calendar,
   X,
   Printer,
+  Package,
 } from 'lucide-react';
 
 export const WholesalePos: React.FC = () => {
@@ -42,6 +44,7 @@ export const WholesalePos: React.FC = () => {
 
   const [cart, setCart] = useState<CartItem[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
+  const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [orderDiscount, setOrderDiscount] = useState<number>(0);
   const [orderNotes, setOrderNotes] = useState<string>('');
   const [dueDate, setDueDate] = useState<string>(() => {
@@ -76,17 +79,25 @@ export const WholesalePos: React.FC = () => {
     return sales.filter((s) => s.customerId === customer.id && s.status !== 'voided');
   }, [sales, customer]);
 
+  // Categories list
+  const categories = useMemo(() => {
+    const set = new Set(products.map((p) => p.category));
+    return ['all', ...Array.from(set)];
+  }, [products]);
+
   // Filtered products
   const filteredProducts = useMemo(() => {
     const q = searchQuery.toLowerCase().trim();
-    if (!q) return products;
-    return products.filter(
-      (p) =>
+    return products.filter((p) => {
+      const matchCat = selectedCategory === 'all' || p.category === selectedCategory;
+      const matchSearch =
+        !q ||
         p.name.toLowerCase().includes(q) ||
         p.code.toLowerCase().includes(q) ||
-        p.barcode.includes(q)
-    );
-  }, [products, searchQuery]);
+        p.barcode.includes(q);
+      return matchCat && matchSearch;
+    });
+  }, [products, selectedCategory, searchQuery]);
 
   // Add bulk product to wholesale cart
   const addToWholesaleCart = (product: Product, preferredUnitName?: string) => {
@@ -461,84 +472,143 @@ export const WholesalePos: React.FC = () => {
             </div>
           </div>
 
+          {/* Visual Category Bar */}
+          <div className="px-3.5 py-2 border-b border-slate-100 flex items-center gap-1.5 overflow-x-auto scrollbar-none bg-slate-50/70">
+            {categories.map((cat) => {
+              const count =
+                cat === 'all'
+                  ? products.length
+                  : products.filter((p) => p.category === cat).length;
+              const meta = getCategoryMeta(cat);
+              const Icon = meta.icon;
+              const isSelected = selectedCategory === cat;
+
+              return (
+                <button
+                  key={cat}
+                  onClick={() => setSelectedCategory(cat)}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all cursor-pointer flex items-center gap-1.5 border ${
+                    isSelected
+                      ? meta.activeBgColor + ' border-transparent'
+                      : `${meta.bgColor} ${meta.borderColor} ${meta.color}`
+                  }`}
+                >
+                  <Icon className={`w-3.5 h-3.5 ${isSelected ? 'text-white' : meta.color}`} />
+                  <span>{cat === 'all' ? 'ທຸກໝວດໝູ່' : cat}</span>
+                  <span
+                    className={`text-[10px] font-bold px-1.5 py-0.2 rounded-full ${
+                      isSelected
+                        ? 'bg-white/20 text-white'
+                        : `${meta.badgeBg} ${meta.badgeText}`
+                    }`}
+                  >
+                    {count}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+
           {/* Wholesale Product Table / Grid */}
           <div className="flex-1 overflow-y-auto p-4 bg-slate-50/30">
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
-              {filteredProducts.map((p) => {
-                const bulkUnits = p.units.filter((u) => u.factor > 1);
-                const hasBulk = bulkUnits.length > 0;
-                const isOutOfStock = p.stockQty <= 0;
+            {filteredProducts.length === 0 ? (
+              <div className="h-full flex flex-col items-center justify-center text-slate-400 py-16">
+                <Package className="w-10 h-10 text-slate-300 mb-2 stroke-1" />
+                <p className="text-xs font-medium">ບໍ່ພົບສິນຄ້າຂາຍສົ່ງໃນໝວດນີ້</p>
+                <p className="text-[11px] text-slate-400 mt-0.5">
+                  ລອງເລືອກ "ທຸກໝວດໝູ່" ຫຼື ສະແກນບາໂຄດສິນຄ້າ
+                </p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+                {filteredProducts.map((p) => {
+                  const bulkUnits = p.units.filter((u) => u.factor > 1);
+                  const hasBulk = bulkUnits.length > 0;
+                  const isOutOfStock = p.stockQty <= 0;
+                  const catMeta = getCategoryMeta(p.category);
+                  const CatIcon = catMeta.icon;
 
-                return (
-                  <div
-                    key={p.id}
-                    className="bg-white rounded-xl border border-slate-200/90 p-3.5 shadow-xs flex flex-col justify-between hover:border-indigo-400 transition-all"
-                  >
-                    <div>
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="flex-1">
-                          <h4 className="text-xs font-bold text-slate-900 leading-tight">
-                            {p.name}
-                          </h4>
-                          <span className="text-[10px] text-slate-400 font-mono">{p.code}</span>
-                        </div>
-                        <span
-                          className={`text-[10px] font-bold px-1.5 py-0.5 rounded-md ${
-                            isOutOfStock
-                              ? 'bg-red-50 text-red-700'
-                              : 'bg-slate-100 text-slate-700'
-                          }`}
-                        >
-                          {p.stockQty} {p.baseUnit}
-                        </span>
-                      </div>
-
-                      {/* Wholesale pricing details */}
-                      <div className="mt-2.5 bg-indigo-50/60 rounded-lg p-2 text-[11px] text-indigo-900 space-y-1">
-                        <div className="flex justify-between font-medium">
-                          <span>ລາຄາສົ່ງພື້ນຖານ:</span>
-                          <span className="font-bold">{formatMoney(p.wholesalePrice)}/{p.baseUnit}</span>
-                        </div>
-                        {p.wholesaleMinQty > 1 && (
-                          <div className="text-[10px] text-indigo-700">
-                            * ຂັ້ນຕ່ຳຂາຍສົ່ງ: {p.wholesaleMinQty} {p.baseUnit}
-                          </div>
-                        )}
-                        {/* Volume tiers */}
-                        {p.volumePrices && p.volumePrices.length > 0 && (
-                          <div className="text-[10px] text-slate-600 border-t border-indigo-100 pt-1 mt-1">
-                            {p.volumePrices.map((t, idx) => (
-                              <div key={idx} className="flex justify-between">
-                                <span>ຊື້ {t.minQty}+ {p.baseUnit}:</span>
-                                <span className="font-semibold text-indigo-800">{t.unitPrice.toLocaleString()} ₭</span>
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Unit add buttons */}
-                    <div className="mt-3 pt-2 border-t border-slate-100 flex flex-wrap gap-1.5">
-                      {p.units.map((u, uIdx) => (
-                        <button
-                          key={uIdx}
-                          disabled={!isQuotationMode && p.stockQty < u.factor}
-                          onClick={() => addToWholesaleCart(p, u.name)}
-                          className="flex-1 py-1 px-2 bg-indigo-600 hover:bg-indigo-500 disabled:bg-slate-200 text-white disabled:text-slate-400 text-xs font-semibold rounded-lg flex items-center justify-center gap-1 cursor-pointer disabled:cursor-not-allowed shadow-2xs transition-colors"
-                        >
-                          <Plus className="w-3 h-3" />
-                          <span>{u.name}</span>
-                          <span className="text-[10px] opacity-80">
-                            ({formatMoney(u.wholesalePrice)})
+                  return (
+                    <div
+                      key={p.id}
+                      className="bg-white rounded-xl border border-slate-200/90 p-3.5 shadow-xs flex flex-col justify-between hover:border-indigo-400 transition-all"
+                    >
+                      <div>
+                        {/* Category badge */}
+                        <div className="flex items-center justify-between mb-1.5">
+                          <span
+                            className={`inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full border ${catMeta.bgColor} ${catMeta.borderColor} ${catMeta.color}`}
+                          >
+                            <CatIcon className="w-2.5 h-2.5" />
+                            <span>{p.category}</span>
                           </span>
-                        </button>
-                      ))}
+                          <span
+                            className={`text-[10px] font-bold px-1.5 py-0.5 rounded-md ${
+                              isOutOfStock
+                                ? 'bg-red-50 text-red-700'
+                                : 'bg-slate-100 text-slate-700'
+                            }`}
+                          >
+                            {p.stockQty} {p.baseUnit}
+                          </span>
+                        </div>
+
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="flex-1">
+                            <h4 className="text-xs font-bold text-slate-900 leading-tight">
+                              {p.name}
+                            </h4>
+                            <span className="text-[10px] text-slate-400 font-mono">{p.code}</span>
+                          </div>
+                        </div>
+
+                        {/* Wholesale pricing details */}
+                        <div className="mt-2.5 bg-indigo-50/60 rounded-lg p-2 text-[11px] text-indigo-900 space-y-1">
+                          <div className="flex justify-between font-medium">
+                            <span>ລາຄາສົ່ງພື້ນຖານ:</span>
+                            <span className="font-bold">{formatMoney(p.wholesalePrice)}/{p.baseUnit}</span>
+                          </div>
+                          {p.wholesaleMinQty > 1 && (
+                            <div className="text-[10px] text-indigo-700">
+                              * ຂັ້ນຕ່ຳຂາຍສົ່ງ: {p.wholesaleMinQty} {p.baseUnit}
+                            </div>
+                          )}
+                          {/* Volume tiers */}
+                          {p.volumePrices && p.volumePrices.length > 0 && (
+                            <div className="text-[10px] text-slate-600 border-t border-indigo-100 pt-1 mt-1">
+                              {p.volumePrices.map((t, idx) => (
+                                <div key={idx} className="flex justify-between">
+                                  <span>ຊື້ {t.minQty}+ {p.baseUnit}:</span>
+                                  <span className="font-semibold text-indigo-800">{t.unitPrice.toLocaleString()} ₭</span>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Unit add buttons */}
+                      <div className="mt-3 pt-2 border-t border-slate-100 flex flex-wrap gap-1.5">
+                        {p.units.map((u, uIdx) => (
+                          <button
+                            key={uIdx}
+                            disabled={!isQuotationMode && p.stockQty < u.factor}
+                            onClick={() => addToWholesaleCart(p, u.name)}
+                            className="flex-1 py-1 px-2 bg-indigo-600 hover:bg-indigo-500 disabled:bg-slate-200 text-white disabled:text-slate-400 text-xs font-semibold rounded-lg flex items-center justify-center gap-1 cursor-pointer disabled:cursor-not-allowed shadow-2xs transition-colors"
+                          >
+                            <Plus className="w-3 h-3" />
+                            <span>{u.name}</span>
+                            <span className="text-[10px] opacity-80">
+                              ({formatMoney(u.wholesalePrice)})
+                            </span>
+                          </button>
+                        ))}
+                      </div>
                     </div>
-                  </div>
-                );
-              })}
-            </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
         </div>
 
