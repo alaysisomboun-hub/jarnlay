@@ -23,6 +23,7 @@ import { Language } from './lib/translations';
 function MainApp() {
   const [activeTab, setActiveTab] = useState<string>('dashboard');
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState<boolean>(false);
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState<boolean>(false);
   const [language, setLanguage] = useState<Language>('lo');
 
@@ -35,6 +36,8 @@ function MainApp() {
         onOpenSettings={() => setIsSettingsOpen(true)}
         isOpenMobile={isMobileSidebarOpen}
         onCloseMobile={() => setIsMobileSidebarOpen(false)}
+        isCollapsed={isSidebarCollapsed}
+        onToggleCollapse={() => setIsSidebarCollapsed((prev) => !prev)}
       />
 
       {/* Main Content Area */}
@@ -45,6 +48,8 @@ function MainApp() {
           onOpenSettings={() => setIsSettingsOpen(true)}
           language={language}
           onChangeLanguage={setLanguage}
+          isSidebarCollapsed={isSidebarCollapsed}
+          onToggleSidebarCollapse={() => setIsSidebarCollapsed((prev) => !prev)}
         />
 
         {/* Viewport Content */}

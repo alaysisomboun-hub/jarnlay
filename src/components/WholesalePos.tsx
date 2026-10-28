@@ -531,31 +531,50 @@ export const WholesalePos: React.FC = () => {
                   return (
                     <div
                       key={p.id}
-                      className="bg-white rounded-xl border border-slate-200/90 p-3.5 shadow-xs flex flex-col justify-between hover:border-indigo-400 transition-all"
+                      className="bg-white rounded-2xl border border-slate-200/90 p-3.5 shadow-xs flex flex-col justify-between hover:border-blue-500 hover:shadow-md transition-all group"
                     >
                       <div>
-                        {/* Category badge */}
-                        <div className="flex items-center justify-between mb-1.5">
+                        {/* Image Thumbnail Container */}
+                        <div className="w-full h-28 rounded-xl bg-slate-100 overflow-hidden mb-2.5 relative flex items-center justify-center border border-slate-100">
+                          {p.imageUrl ? (
+                            <img
+                              src={p.imageUrl}
+                              alt={p.name}
+                              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200"
+                              loading="lazy"
+                            />
+                          ) : (
+                            <div className="w-full h-full flex flex-col items-center justify-center bg-gradient-to-b from-slate-50 to-slate-100 text-slate-400">
+                              <Package className="w-8 h-8 stroke-1 text-slate-300" />
+                              <span className="text-[10px] text-slate-400 mt-1 font-mono">{p.baseUnit}</span>
+                            </div>
+                          )}
+
+                          {/* Stock badge */}
                           <span
-                            className={`inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full border ${catMeta.bgColor} ${catMeta.borderColor} ${catMeta.color}`}
-                          >
-                            <CatIcon className="w-2.5 h-2.5" />
-                            <span>{p.category}</span>
-                          </span>
-                          <span
-                            className={`text-[10px] font-bold px-1.5 py-0.5 rounded-md ${
+                            className={`absolute top-2 right-2 text-[10px] font-bold px-2 py-0.5 rounded-full shadow-xs backdrop-blur-xs ${
                               isOutOfStock
-                                ? 'bg-red-50 text-red-700'
-                                : 'bg-slate-100 text-slate-700'
+                                ? 'bg-red-600 text-white'
+                                : 'bg-slate-900/80 text-white'
                             }`}
                           >
-                            {p.stockQty} {p.baseUnit}
+                            {isOutOfStock ? 'ໝົດ' : `${p.stockQty} ${p.baseUnit}`}
                           </span>
+
+                          <span className="absolute top-2 left-2 text-[9px] font-extrabold px-1.5 py-0.5 rounded-md bg-blue-600 text-white shadow-xs">
+                            ຂາຍສົ່ງ
+                          </span>
+                        </div>
+
+                        {/* Category badge */}
+                        <div className="flex items-center gap-1 mb-1 text-[10px] font-semibold">
+                          <CatIcon className={`w-3 h-3 ${catMeta.color} shrink-0`} />
+                          <span className={`${catMeta.color} truncate`}>{p.category}</span>
                         </div>
 
                         <div className="flex items-start justify-between gap-2">
                           <div className="flex-1">
-                            <h4 className="text-xs font-bold text-slate-900 leading-tight">
+                            <h4 className="text-xs font-bold text-slate-900 leading-tight group-hover:text-blue-700 transition-colors">
                               {p.name}
                             </h4>
                             <span className="text-[10px] text-slate-400 font-mono">{p.code}</span>

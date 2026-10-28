@@ -12,9 +12,10 @@ import {
   BarChart3,
   ShieldCheck,
   Settings,
-  AlertTriangle,
-  LogOut,
+  ChevronLeft,
+  ChevronRight,
   Store,
+  LucideIcon,
 } from 'lucide-react';
 
 interface SidebarProps {
@@ -23,6 +24,21 @@ interface SidebarProps {
   onOpenSettings: () => void;
   isOpenMobile: boolean;
   onCloseMobile: () => void;
+  isCollapsed?: boolean;
+  onToggleCollapse?: () => void;
+}
+
+interface MenuGroup {
+  groupTitle: string;
+  items: {
+    id: string;
+    label: string;
+    shortLabel: string;
+    icon: LucideIcon;
+    badge?: number;
+    badgeColor?: string;
+    accentColor?: string;
+  }[];
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -31,6 +47,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onOpenSettings,
   isOpenMobile,
   onCloseMobile,
+  isCollapsed = false,
+  onToggleCollapse,
 }) => {
   const { products, customers, currentUser, settings } = usePos();
 
@@ -42,29 +60,98 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
   const debtorsCount = customers.filter((c) => c.currentDebt > 0).length;
 
-  const menuItems = [
-    { id: 'dashboard', label: 'ໜ້າຫຼັກ (Dashboard)', icon: LayoutDashboard },
-    { id: 'retail-pos', label: 'ຂາຍຍ່ອຍ (Retail POS)', icon: ShoppingCart, highlight: true },
-    { id: 'wholesale-pos', label: 'ຂາຍສົ່ງ (Wholesale POS)', icon: Truck, highlight: true },
-    { id: 'products', label: 'ຈັດການສິນຄ້າ', icon: Package },
+  const menuGroups: MenuGroup[] = [
     {
-      id: 'stock',
-      label: 'ສະຕັອກສິນຄ້າ',
-      icon: Layers,
-      badge: totalStockAlerts > 0 ? totalStockAlerts : undefined,
-      badgeColor: 'bg-red-500',
+      groupTitle: 'ລະບົບຂາຍສິນຄ້າ (Point of Sale)',
+      items: [
+        {
+          id: 'retail-pos',
+          label: 'ຂາຍຍ່ອຍ (Retail POS)',
+          shortLabel: 'ຂາຍຍ່ອຍ',
+          icon: ShoppingCart,
+          accentColor: 'text-emerald-400',
+        },
+        {
+          id: 'wholesale-pos',
+          label: 'ຂາຍສົ່ງ (Wholesale POS)',
+          shortLabel: 'ຂາຍສົ່ງ',
+          icon: Truck,
+          accentColor: 'text-blue-400',
+        },
+        {
+          id: 'dashboard',
+          label: 'ໜ້າຫຼັກ (Dashboard)',
+          shortLabel: 'ພາບລວມ',
+          icon: LayoutDashboard,
+        },
+      ],
     },
     {
-      id: 'customers',
-      label: 'ລູກຄ້າ & ລູກໜີ້',
-      icon: Users,
-      badge: debtorsCount > 0 ? debtorsCount : undefined,
-      badgeColor: 'bg-amber-500',
+      groupTitle: 'ສິນຄ້າ & ສະຕັອກ (Inventory)',
+      items: [
+        {
+          id: 'products',
+          label: 'ຈັດການສິນຄ້າ',
+          shortLabel: 'ສິນຄ້າ',
+          icon: Package,
+        },
+        {
+          id: 'stock',
+          label: 'ສະຕັອກສິນຄ້າ',
+          shortLabel: 'ສະຕັອກ',
+          icon: Layers,
+          badge: totalStockAlerts > 0 ? totalStockAlerts : undefined,
+          badgeColor: 'bg-red-500',
+        },
+      ],
     },
-    { id: 'suppliers', label: 'ຜູ້ສະໜອງ & ໜີ້ສິນ', icon: Building2 },
-    { id: 'finance', label: 'ລາຍຮັບ - ລາຍຈ່າຍ', icon: DollarSign },
-    { id: 'reports', label: 'ລາຍງານການເງິນ', icon: BarChart3 },
-    { id: 'staff', label: 'ພະນັກງານ & ສິດທິ', icon: ShieldCheck },
+    {
+      groupTitle: 'ລູກຄ້າ & ຄູ່ຄ້າ (CRM)',
+      items: [
+        {
+          id: 'customers',
+          label: 'ລູກຄ້າ & ລູກໜີ້',
+          shortLabel: 'ລູກຄ້າ',
+          icon: Users,
+          badge: debtorsCount > 0 ? debtorsCount : undefined,
+          badgeColor: 'bg-amber-500',
+        },
+        {
+          id: 'suppliers',
+          label: 'ຜູ້ສະໜອງ & ໜີ້ສິນ',
+          shortLabel: 'ຜູ້ສະໜອງ',
+          icon: Building2,
+        },
+      ],
+    },
+    {
+      groupTitle: 'ການເງິນ & ບົດລາຍງານ (Finance)',
+      items: [
+        {
+          id: 'finance',
+          label: 'ລາຍຮັບ - ລາຍຈ່າຍ',
+          shortLabel: 'ລາຍຮັບ-ຈ່າຍ',
+          icon: DollarSign,
+        },
+        {
+          id: 'reports',
+          label: 'ລາຍງານການເງິນ',
+          shortLabel: 'ລາຍງານ',
+          icon: BarChart3,
+        },
+      ],
+    },
+    {
+      groupTitle: 'ລະບົບ & ຄວາມປອດໄພ (System)',
+      items: [
+        {
+          id: 'staff',
+          label: 'ພະນັກງານ & ສິດທິ',
+          shortLabel: 'ພະນັກງານ',
+          icon: ShieldCheck,
+        },
+      ],
+    },
   ];
 
   return (
@@ -79,95 +166,174 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
       {/* Sidebar container */}
       <aside
-        className={`fixed lg:static top-0 left-0 z-40 h-screen w-64 bg-slate-900 text-slate-300 flex flex-col justify-between border-r border-slate-800 transition-transform duration-200 ease-in-out ${
-          isOpenMobile ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'
-        }`}
+        className={`fixed lg:static top-0 left-0 z-40 h-screen bg-slate-900 text-slate-300 flex flex-col justify-between border-r border-slate-800 transition-all duration-200 ease-in-out select-none ${
+          isOpenMobile ? 'translate-x-0 w-64' : '-translate-x-full lg:translate-x-0'
+        } ${isCollapsed ? 'lg:w-[72px]' : 'lg:w-64'}`}
       >
-        <div>
-          {/* Logo & Brand */}
-          <div className="p-4 border-b border-slate-800 flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-emerald-600 to-indigo-600 flex items-center justify-center text-white shadow-md font-bold text-base shrink-0">
-              LP
+        <div className="flex-1 flex flex-col min-h-0">
+          {/* Logo & Brand Header */}
+          <div className="p-3.5 border-b border-slate-800 flex items-center justify-between gap-2.5">
+            <div className="flex items-center gap-2.5 overflow-hidden">
+              <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-emerald-600 to-teal-500 flex items-center justify-center text-white shadow-md font-extrabold text-sm shrink-0 tracking-wider ring-1 ring-emerald-400/30">
+                LP
+              </div>
+              {!isCollapsed && (
+                <div className="overflow-hidden">
+                  <h1 className="font-bold text-sm text-white truncate tracking-tight flex items-center gap-1.5">
+                    LaoPOS Pro
+                    <span className="text-[9px] px-1.5 py-0.2 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 font-semibold">
+                      v2.5
+                    </span>
+                  </h1>
+                  <p className="text-[10px] text-slate-400 truncate">
+                    {settings.storeName}
+                  </p>
+                </div>
+              )}
             </div>
-            <div className="overflow-hidden">
-              <h1 className="font-bold text-sm text-white truncate tracking-tight">
-                LaoPOS Pro
-              </h1>
-              <p className="text-[10px] text-slate-400 truncate">
-                {settings.storeName}
-              </p>
-            </div>
+
+            {/* Desktop Collapse Toggle Button */}
+            {onToggleCollapse && (
+              <button
+                onClick={onToggleCollapse}
+                className="hidden lg:flex p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors cursor-pointer shrink-0"
+                title={isCollapsed ? 'ຂະຫຍາຍເມນູ (Expand)' : 'ຫຍໍ້ເມນູ (Collapse)'}
+              >
+                {isCollapsed ? (
+                  <ChevronRight className="w-4 h-4" />
+                ) : (
+                  <ChevronLeft className="w-4 h-4" />
+                )}
+              </button>
+            )}
           </div>
 
-          {/* Navigation Items */}
-          <nav className="p-3 space-y-1 overflow-y-auto max-h-[calc(100vh-160px)]">
-            {menuItems.map((item) => {
-              const Icon = item.icon;
-              const isActive = activeTab === item.id;
-
-              return (
-                <button
-                  key={item.id}
-                  onClick={() => {
-                    onSelectTab(item.id);
-                    onCloseMobile();
-                  }}
-                  className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
-                    isActive
-                      ? 'bg-indigo-600 text-white shadow-sm'
-                      : 'text-slate-300 hover:bg-slate-800 hover:text-white'
-                  }`}
-                >
-                  <div className="flex items-center gap-3 truncate">
-                    <Icon
-                      className={`w-4 h-4 shrink-0 ${
-                        isActive
-                          ? 'text-white'
-                          : item.highlight
-                          ? 'text-emerald-400'
-                          : 'text-slate-400'
-                      }`}
-                    />
-                    <span className="truncate">{item.label}</span>
+          {/* Grouped Navigation Items */}
+          <nav className="flex-1 p-2.5 space-y-4 overflow-y-auto scrollbar-none">
+            {menuGroups.map((group, groupIdx) => (
+              <div key={groupIdx} className="space-y-1">
+                {/* Section Header */}
+                {!isCollapsed ? (
+                  <div className="px-2.5 pt-1 text-[10px] font-semibold tracking-wider text-slate-400 uppercase">
+                    {group.groupTitle}
                   </div>
+                ) : (
+                  <div className="h-px bg-slate-800 mx-2 my-2" />
+                )}
 
-                  {item.badge !== undefined && (
-                    <span
-                      className={`text-[10px] font-bold text-white px-1.5 py-0.2 rounded-full ${item.badgeColor}`}
+                {/* Items in Group */}
+                {group.items.map((item) => {
+                  const Icon = item.icon;
+                  const isActive = activeTab === item.id;
+
+                  return (
+                    <button
+                      key={item.id}
+                      onClick={() => {
+                        onSelectTab(item.id);
+                        onCloseMobile();
+                      }}
+                      title={isCollapsed ? item.label : undefined}
+                      className={`w-full flex items-center ${
+                        isCollapsed ? 'justify-center px-2 py-2.5' : 'justify-between px-3 py-2'
+                      } rounded-xl text-xs font-semibold transition-all cursor-pointer relative group ${
+                        isActive
+                          ? 'bg-emerald-600 text-white shadow-sm shadow-emerald-950/20'
+                          : 'text-slate-300 hover:bg-slate-800 hover:text-white'
+                      }`}
                     >
-                      {item.badge}
-                    </span>
-                  )}
-                </button>
-              );
-            })}
+                      <div className={`flex items-center gap-2.5 truncate ${isCollapsed ? 'justify-center' : ''}`}>
+                        <Icon
+                          className={`w-4 h-4 shrink-0 transition-transform group-hover:scale-105 ${
+                            isActive
+                              ? 'text-white'
+                              : item.accentColor
+                              ? item.accentColor
+                              : 'text-slate-400'
+                          }`}
+                        />
+                        {!isCollapsed && <span className="truncate">{item.label}</span>}
+                      </div>
+
+                      {/* Badge Counter */}
+                      {item.badge !== undefined && (
+                        <span
+                          className={`${
+                            isCollapsed
+                              ? 'absolute -top-1 -right-1 min-w-[16px] h-4 text-[9px]'
+                              : 'text-[10px] px-1.5 py-0.2'
+                          } font-bold text-white rounded-full flex items-center justify-center ${item.badgeColor || 'bg-red-500'}`}
+                        >
+                          {item.badge}
+                        </span>
+                      )}
+
+                      {/* Tooltip on collapsed desktop */}
+                      {isCollapsed && (
+                        <span className="hidden lg:group-hover:flex absolute left-full ml-2 px-2.5 py-1 bg-slate-900 text-white text-[11px] rounded-lg shadow-xl whitespace-nowrap z-50 border border-slate-700 pointer-events-none items-center gap-1.5">
+                          {item.label}
+                          {item.badge !== undefined && (
+                            <span className="bg-red-500 text-white text-[9px] px-1 rounded-full">
+                              {item.badge}
+                            </span>
+                          )}
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            ))}
           </nav>
         </div>
 
         {/* Bottom User & Settings */}
-        <div className="p-3 border-t border-slate-800 bg-slate-950/40 space-y-1">
+        <div className="p-2.5 border-t border-slate-800 bg-slate-950/40 space-y-1">
           <button
             onClick={() => {
               onOpenSettings();
               onCloseMobile();
             }}
-            className="w-full flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-medium text-slate-300 hover:bg-slate-800 hover:text-white transition-colors cursor-pointer"
+            title={isCollapsed ? 'ຕັ້ງຄ່າລະບົບ (Settings)' : undefined}
+            className={`w-full flex items-center ${
+              isCollapsed ? 'justify-center p-2' : 'gap-2.5 px-3 py-2'
+            } rounded-xl text-xs font-medium text-slate-300 hover:bg-slate-800 hover:text-white transition-colors cursor-pointer group relative`}
           >
-            <Settings className="w-4 h-4 text-slate-400" />
-            <span>ຕັ້ງຄ່າລະບົບ</span>
+            <Settings className="w-4 h-4 text-slate-400 group-hover:rotate-45 transition-transform shrink-0" />
+            {!isCollapsed && <span>ຕັ້ງຄ່າຮ້ານຄ້າ & ລະບົບ</span>}
+            {isCollapsed && (
+              <span className="hidden lg:group-hover:block absolute left-full ml-2 px-2.5 py-1 bg-slate-900 text-white text-[11px] rounded-lg shadow-xl whitespace-nowrap z-50 border border-slate-700 pointer-events-none">
+                ຕັ້ງຄ່າຮ້ານຄ້າ
+              </span>
+            )}
           </button>
 
           {/* Current Staff info */}
-          <div className="px-3 py-2 flex items-center justify-between text-xs border-t border-slate-800/80 pt-2.5">
-            <div className="truncate pr-2">
-              <p className="font-semibold text-white truncate text-[11px]">{currentUser.name}</p>
-              <p className="text-[10px] text-indigo-400 capitalize">
-                {currentUser.role === 'admin' && 'ຜູ້ດູແລ (Admin)'}
-                {currentUser.role === 'manager' && 'ຜູ້ຈັດການ'}
-                {currentUser.role === 'cashier' && 'ພະນັກງານຂາຍ'}
-              </p>
-            </div>
-            <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0"></span>
+          <div
+            className={`flex items-center ${
+              isCollapsed ? 'justify-center p-1.5' : 'justify-between px-3 py-2'
+            } text-xs border-t border-slate-800/80 pt-2`}
+          >
+            {!isCollapsed ? (
+              <div className="truncate pr-2">
+                <p className="font-semibold text-white truncate text-[11px] flex items-center gap-1.5">
+                  <span className="w-2 h-2 rounded-full bg-emerald-500 inline-block shrink-0 animate-pulse"></span>
+                  {currentUser.name}
+                </p>
+                <p className="text-[10px] text-emerald-400 capitalize pl-3.5">
+                  {currentUser.role === 'admin' && 'ຜູ້ດູແລ (Admin)'}
+                  {currentUser.role === 'manager' && 'ຜູ້ຈັດການ (Manager)'}
+                  {currentUser.role === 'cashier' && 'ພະນັກງານຂາຍ (Cashier)'}
+                </p>
+              </div>
+            ) : (
+              <div
+                title={`${currentUser.name} (${currentUser.role})`}
+                className="w-7 h-7 rounded-full bg-emerald-600 text-white flex items-center justify-center font-bold text-xs ring-2 ring-emerald-500/30"
+              >
+                {currentUser.name.slice(0, 1)}
+              </div>
+            )}
           </div>
         </div>
       </aside>
