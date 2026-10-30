@@ -21,11 +21,35 @@ import {
   initialExpenses,
   initialStockMovements,
   initialStaff,
-  initialSettings,
   initialAuditLogs,
 } from '../lib/initialData';
+import { testFirestoreConnection } from '../lib/firebase';
+import {
+  seedFirestoreIfEmpty,
+  subscribeProducts,
+  subscribeCustomers,
+  subscribeSuppliers,
+  subscribeSales,
+  subscribeStockMovements,
+  subscribeIncomeExpenses,
+  subscribeStaff,
+  subscribeSettings,
+  syncProductToFirestore,
+  deleteProductFromFirestore,
+  syncCustomerToFirestore,
+  syncSupplierToFirestore,
+  syncSaleToFirestore,
+  syncStockMovementToFirestore,
+  syncIncomeExpenseToFirestore,
+  syncStaffToFirestore,
+  syncSettingsToFirestore,
+  syncAuditLogToFirestore,
+} from '../lib/firestoreService';
 
 interface PosContextType {
+  // Firebase Cloud Connection
+  firebaseConnected: boolean;
+
   // Products
   products: Product[];
   addProduct: (product: Omit<Product, 'id' | 'createdAt' | 'updatedAt'>) => Product;
@@ -147,6 +171,7 @@ export const PosProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [settings, setSettings] = useState<AppSettings>(() => loadState(STORAGE_KEYS.SETTINGS, initialSettings));
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>(() => loadState(STORAGE_KEYS.AUDIT, initialAuditLogs));
   const [selectedCurrency, setSelectedCurrency] = useState<Currency>('LAK');
+  const [firebaseConnected, setFirebaseConnected] = useState<boolean>(false);
 
   const [currentUser, setCurrentUser] = useState<StaffUser>(() => {
     const savedUserId = localStorage.getItem(STORAGE_KEYS.CURRENT_USER_ID);
@@ -266,8 +291,109 @@ export const PosProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const syncNow = async () => {
+    testFirestoreConnection().then(setFirebaseConnected);
     await fetchServerSync(false);
   };
+
+  // Firebase Firestore Real-Time Cloud Synchronization
+  useEffect(() => {
+    let unsubs: Array<() => void> = [];
+
+    // 1. Critical constraint: test Firestore connection on boot
+    testFirestoreConnection().then((connected) => {
+      setFirebaseConnected(connected);
+      if (connected) {
+        setSyncStatus('synced');
+        seedFirestoreIfEmpty();
+      }
+    });
+
+    // 2. Real-time multi-device cloud listeners
+    try {
+      const u1 = subscribeProducts((remoteProds) => {
+        if (remoteProds && remoteProds.length > 0) {
+          isRemoteUpdateRef.current = true;
+          setProducts(remoteProds);
+          safeSaveState(STORAGE_KEYS.PRODUCTS, remoteProds);
+          setSyncStatus('synced');
+          setLastSyncTime(Date.now());
+          setTimeout(() => { isRemoteUpdateRef.current = false; }, 200);
+        }
+      });
+      const u2 = subscribeCustomers((remoteCusts) => {
+        if (remoteCusts && remoteCusts.length > 0) {
+          isRemoteUpdateRef.current = true;
+          setCustomers(remoteCusts);
+          safeSaveState(STORAGE_KEYS.CUSTOMERS, remoteCusts);
+          setSyncStatus('synced');
+          setTimeout(() => { isRemoteUpdateRef.current = false; }, 200);
+        }
+      });
+      const u3 = subscribeSuppliers((remoteSups) => {
+        if (remoteSups && remoteSups.length > 0) {
+          isRemoteUpdateRef.current = true;
+          setSuppliers(remoteSups);
+          safeSaveState(STORAGE_KEYS.SUPPLIERS, remoteSups);
+          setSyncStatus('synced');
+          setTimeout(() => { isRemoteUpdateRef.current = false; }, 200);
+        }
+      });
+      const u4 = subscribeSales((remoteSales) => {
+        if (remoteSales && remoteSales.length > 0) {
+          isRemoteUpdateRef.current = true;
+          setSales(remoteSales);
+          safeSaveState(STORAGE_KEYS.SALES, remoteSales);
+          setSyncStatus('synced');
+          setTimeout(() => { isRemoteUpdateRef.current = false; }, 200);
+        }
+      });
+      const u5 = subscribeStockMovements((remoteMovs) => {
+        if (remoteMovs && remoteMovs.length > 0) {
+          isRemoteUpdateRef.current = true;
+          setStockMovements(remoteMovs);
+          safeSaveState(STORAGE_KEYS.STOCK_MOVEMENTS, remoteMovs);
+          setSyncStatus('synced');
+          setTimeout(() => { isRemoteUpdateRef.current = false; }, 200);
+        }
+      });
+      const u6 = subscribeIncomeExpenses((remoteExps) => {
+        if (remoteExps && remoteExps.length > 0) {
+          isRemoteUpdateRef.current = true;
+          setIncomeExpenses(remoteExps);
+          safeSaveState(STORAGE_KEYS.EXPENSES, remoteExps);
+          setSyncStatus('synced');
+          setTimeout(() => { isRemoteUpdateRef.current = false; }, 200);
+        }
+      });
+      const u7 = subscribeStaff((remoteStaff) => {
+        if (remoteStaff && remoteStaff.length > 0) {
+          isRemoteUpdateRef.current = true;
+          setStaffList(remoteStaff);
+          safeSaveState(STORAGE_KEYS.STAFF, remoteStaff);
+          setSyncStatus('synced');
+          setTimeout(() => { isRemoteUpdateRef.current = false; }, 200);
+        }
+      });
+      const u8 = subscribeSettings((remoteSettings) => {
+        if (remoteSettings) {
+          isRemoteUpdateRef.current = true;
+          setSettings(remoteSettings);
+          safeSaveState(STORAGE_KEYS.SETTINGS, remoteSettings);
+          setSyncStatus('synced');
+          setTimeout(() => { isRemoteUpdateRef.current = false; }, 200);
+        }
+      });
+      unsubs = [u1, u2, u3, u4, u5, u6, u7, u8];
+    } catch (e) {
+      console.warn('Error attaching Firestore listeners:', e);
+    }
+
+    return () => {
+      unsubs.forEach((unsub) => {
+        try { unsub(); } catch {}
+      });
+    };
+  }, []);
 
   // Real-time SSE Connection + Periodic Fallback Polling (Every 4 seconds)
   useEffect(() => {
@@ -436,6 +562,7 @@ export const PosProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       details,
     };
     setAuditLogs((prev) => [newLog, ...prev]);
+    syncAuditLogToFirestore(newLog);
   };
 
   // Currency Converter Formatter
@@ -469,25 +596,31 @@ export const PosProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
     setProducts((prev) => {
       const updated = [newProduct, ...prev];
-      // Immediately write to storage to guarantee persistence across mobile page navigation
       safeSaveState(STORAGE_KEYS.PRODUCTS, updated);
       return updated;
     });
+    syncProductToFirestore(newProduct);
     logAudit('ເພີ່ມສິນຄ້າໃໝ່ (Create Product)', newProduct.code, `ເພີ່ມສິນຄ້າ: ${newProduct.name}`);
     return newProduct;
   };
 
   const updateProduct = (id: string, updates: Partial<Product>) => {
+    let syncedProduct: Product | undefined;
     setProducts((prev) => {
       const updated = prev.map((p) => {
         if (p.id === id) {
-          return { ...p, ...updates, updatedAt: new Date().toISOString() };
+          const mod = { ...p, ...updates, updatedAt: new Date().toISOString() };
+          syncedProduct = mod;
+          return mod;
         }
         return p;
       });
       safeSaveState(STORAGE_KEYS.PRODUCTS, updated);
       return updated;
     });
+    if (syncedProduct) {
+      syncProductToFirestore(syncedProduct);
+    }
     const prod = products.find((p) => p.id === id);
     logAudit('ແກ້ໄຂສິນຄ້າ (Edit Product)', prod?.code || id, `ອັບເດດຂໍ້ມູນສິນຄ້າ ${prod?.name || ''}`);
   };
@@ -499,6 +632,7 @@ export const PosProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       safeSaveState(STORAGE_KEYS.PRODUCTS, updated);
       return updated;
     });
+    deleteProductFromFirestore(id);
     logAudit('ລຶບສິນຄ້າ (Delete Product)', prod?.code || id, `ລຶບສິນຄ້າ ${prod?.name || ''}`);
     return true;
   };
@@ -511,11 +645,26 @@ export const PosProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       createdAt: new Date().toISOString(),
     };
     setCustomers((prev) => [newCust, ...prev]);
+    syncCustomerToFirestore(newCust);
     logAudit('ເພີ່ມລູກຄ້າໃໝ່ (Add Customer)', newCust.code, `ເພີ່ມລູກຄ້າ: ${newCust.name} (${newCust.type})`);
   };
 
   const updateCustomer = (id: string, updates: Partial<Customer>) => {
-    setCustomers((prev) => prev.map((c) => (c.id === id ? { ...c, ...updates } : c)));
+    let syncedCust: Customer | undefined;
+    setCustomers((prev) => {
+      const updated = prev.map((c) => {
+        if (c.id === id) {
+          const mod = { ...c, ...updates };
+          syncedCust = mod;
+          return mod;
+        }
+        return c;
+      });
+      return updated;
+    });
+    if (syncedCust) {
+      syncCustomerToFirestore(syncedCust);
+    }
     const cust = customers.find((c) => c.id === id);
     logAudit('ແກ້ໄຂຂໍ້ມູນລູກຄ້າ (Edit Customer)', cust?.code || id, `ແກ້ໄຂ: ${cust?.name || ''}`);
   };
@@ -532,7 +681,9 @@ export const PosProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       prev.map((c) => {
         if (c.id === customerId) {
           const newDebt = Math.max(0, c.currentDebt - amount);
-          return { ...c, currentDebt: newDebt };
+          const mod = { ...c, currentDebt: newDebt };
+          syncCustomerToFirestore(mod);
+          return mod;
         }
         return c;
       })
@@ -553,6 +704,7 @@ export const PosProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       createdBy: currentUser.name,
     };
     setIncomeExpenses((prev) => [incomeEntry, ...prev]);
+    syncIncomeExpenseToFirestore(incomeEntry);
 
     logAudit('ຮັບຊຳລະໜີ້ (Debtor Payment)', cust?.code || customerId, `ຮັບຊຳລະ: ${amount.toLocaleString()} ₭ ຈາກ ${cust?.name}`);
   };
@@ -565,11 +717,26 @@ export const PosProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       createdAt: new Date().toISOString(),
     };
     setSuppliers((prev) => [newSup, ...prev]);
+    syncSupplierToFirestore(newSup);
     logAudit('ເພີ່ມຜູ້ສະໜອງໃໝ່ (Add Supplier)', newSup.code, `ເພີ່ມ: ${newSup.name}`);
   };
 
   const updateSupplier = (id: string, updates: Partial<Supplier>) => {
-    setSuppliers((prev) => prev.map((s) => (s.id === id ? { ...s, ...updates } : s)));
+    let syncedSup: Supplier | undefined;
+    setSuppliers((prev) => {
+      const updated = prev.map((s) => {
+        if (s.id === id) {
+          const mod = { ...s, ...updates };
+          syncedSup = mod;
+          return mod;
+        }
+        return s;
+      });
+      return updated;
+    });
+    if (syncedSup) {
+      syncSupplierToFirestore(syncedSup);
+    }
     const sup = suppliers.find((s) => s.id === id);
     logAudit('ແກ້ໄຂຜູ້ສະໜອງ (Edit Supplier)', sup?.code || id, `ແກ້ໄຂ: ${sup?.name || ''}`);
   };
@@ -685,6 +852,8 @@ export const PosProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     // 3. Add to sales list
     setSales((prev) => [newSale, ...prev]);
+    syncSaleToFirestore(newSale);
+    newStockMovements.forEach((m) => syncStockMovementToFirestore(m));
 
     // 4. Audit Log
     logAudit(

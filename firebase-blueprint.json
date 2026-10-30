@@ -1,0 +1,199 @@
+{
+  "entities": {
+    "Product": {
+      "title": "Product",
+      "description": "Product catalog item in POS with multi-unit conversions and pricing",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "code": { "type": "string" },
+        "barcode": { "type": "string" },
+        "name": { "type": "string" },
+        "category": { "type": "string" },
+        "imageUrl": { "type": "string" },
+        "baseUnit": { "type": "string" },
+        "costPrice": { "type": "number" },
+        "retailPrice": { "type": "number" },
+        "wholesalePrice": { "type": "number" },
+        "wholesaleMinQty": { "type": "number" },
+        "stockQty": { "type": "number" },
+        "minStockAlert": { "type": "number" },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["id", "code", "name", "category", "baseUnit", "retailPrice", "stockQty"]
+    },
+    "Customer": {
+      "title": "Customer",
+      "description": "Customer entity for retail and wholesale clients",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "code": { "type": "string" },
+        "name": { "type": "string" },
+        "phone": { "type": "string" },
+        "address": { "type": "string" },
+        "type": { "type": "string" },
+        "creditLimit": { "type": "number" },
+        "currentDebt": { "type": "number" },
+        "paymentTermsDays": { "type": "number" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "code", "name", "type"]
+    },
+    "Supplier": {
+      "title": "Supplier",
+      "description": "Product vendor and supplier payable accounts",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "code": { "type": "string" },
+        "name": { "type": "string" },
+        "contactPerson": { "type": "string" },
+        "phone": { "type": "string" },
+        "address": { "type": "string" },
+        "totalPayable": { "type": "number" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "code", "name"]
+    },
+    "SaleOrder": {
+      "title": "SaleOrder",
+      "description": "Completed or pending POS invoice",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "invoiceNo": { "type": "string" },
+        "orderType": { "type": "string" },
+        "customerId": { "type": "string" },
+        "customerName": { "type": "string" },
+        "date": { "type": "string" },
+        "subtotal": { "type": "number" },
+        "discount": { "type": "number" },
+        "total": { "type": "number" },
+        "paymentMethod": { "type": "string" },
+        "amountPaid": { "type": "number" },
+        "change": { "type": "number" },
+        "debtAmount": { "type": "number" },
+        "status": { "type": "string" },
+        "cashierId": { "type": "string" },
+        "cashierName": { "type": "string" }
+      },
+      "required": ["id", "invoiceNo", "orderType", "date", "total", "paymentMethod", "status"]
+    },
+    "StockMovement": {
+      "title": "StockMovement",
+      "description": "Inventory movement audit log",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "date": { "type": "string" },
+        "productId": { "type": "string" },
+        "productName": { "type": "string" },
+        "type": { "type": "string" },
+        "qtyChange": { "type": "number" },
+        "unit": { "type": "string" },
+        "balanceAfter": { "type": "number" },
+        "referenceNo": { "type": "string" },
+        "operatorName": { "type": "string" }
+      },
+      "required": ["id", "date", "productId", "type", "qtyChange", "balanceAfter", "referenceNo"]
+    },
+    "IncomeExpense": {
+      "title": "IncomeExpense",
+      "description": "Cashbook entry for store income and operational expenses",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "date": { "type": "string" },
+        "type": { "type": "string" },
+        "category": { "type": "string" },
+        "amount": { "type": "number" },
+        "paymentMethod": { "type": "string" },
+        "createdBy": { "type": "string" }
+      },
+      "required": ["id", "date", "type", "category", "amount", "paymentMethod"]
+    },
+    "StaffUser": {
+      "title": "StaffUser",
+      "description": "Staff account with PIN, role and access permissions",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "username": { "type": "string" },
+        "pin": { "type": "string" },
+        "role": { "type": "string" },
+        "active": { "type": "boolean" }
+      },
+      "required": ["id", "name", "username", "pin", "role", "active"]
+    },
+    "AppSettings": {
+      "title": "AppSettings",
+      "description": "Global store configuration and exchange rates",
+      "type": "object",
+      "properties": {
+        "storeName": { "type": "string" },
+        "storeBranch": { "type": "string" },
+        "phone": { "type": "string" },
+        "address": { "type": "string" },
+        "defaultCurrency": { "type": "string" }
+      },
+      "required": ["storeName", "defaultCurrency"]
+    },
+    "AuditLog": {
+      "title": "AuditLog",
+      "description": "Action audit log for compliance and tracing",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "timestamp": { "type": "string" },
+        "userId": { "type": "string" },
+        "userName": { "type": "string" },
+        "userRole": { "type": "string" },
+        "action": { "type": "string" },
+        "target": { "type": "string" },
+        "details": { "type": "string" }
+      },
+      "required": ["id", "timestamp", "userName", "action", "target"]
+    }
+  },
+  "firestore": {
+    "/products/{productId}": {
+      "schema": "Product",
+      "description": "Collection of products in the catalog"
+    },
+    "/customers/{customerId}": {
+      "schema": "Customer",
+      "description": "Collection of retail and wholesale customers"
+    },
+    "/suppliers/{supplierId}": {
+      "schema": "Supplier",
+      "description": "Collection of suppliers and vendor debt accounts"
+    },
+    "/sales/{saleId}": {
+      "schema": "SaleOrder",
+      "description": "Collection of completed sales transactions"
+    },
+    "/stockMovements/{movementId}": {
+      "schema": "StockMovement",
+      "description": "Inventory movement audit trails"
+    },
+    "/incomeExpenses/{expenseId}": {
+      "schema": "IncomeExpense",
+      "description": "Income and expense transactions"
+    },
+    "/staff/{staffId}": {
+      "schema": "StaffUser",
+      "description": "Staff accounts and permissions"
+    },
+    "/settings/{settingId}": {
+      "schema": "AppSettings",
+      "description": "Store application settings"
+    },
+    "/auditLogs/{logId}": {
+      "schema": "AuditLog",
+      "description": "System activity logs"
+    }
+  }
+}
