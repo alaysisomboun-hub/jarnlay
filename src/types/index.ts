@@ -1,4 +1,24 @@
-export type Role = 'admin' | 'manager' | 'cashier';
+export type Role = 'admin' | 'manager' | 'cashier' | 'stock' | 'accountant';
+
+export type MenuPermission =
+  | 'dashboard'
+  | 'retail-pos'
+  | 'wholesale-pos'
+  | 'products'
+  | 'stock'
+  | 'customers'
+  | 'suppliers'
+  | 'finance'
+  | 'reports'
+  | 'staff'
+  | 'settings';
+
+export type ActionPermission =
+  | 'canVoidSale'
+  | 'canEditPrice'
+  | 'canViewCost'
+  | 'canExportData'
+  | 'canManageUsers';
 
 export type CustomerType = 'general' | 'retail' | 'wholesale';
 

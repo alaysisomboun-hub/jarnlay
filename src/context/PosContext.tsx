@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
 import {
   Product,
   Customer,
@@ -28,7 +28,7 @@ import {
 interface PosContextType {
   // Products
   products: Product[];
-  addProduct: (product: Omit<Product, 'id' | 'createdAt' | 'updatedAt'>) => void;
+  addProduct: (product: Omit<Product, 'id' | 'createdAt' | 'updatedAt'>) => Product;
   updateProduct: (id: string, product: Partial<Product>) => void;
   deleteProduct: (id: string) => boolean;
   
@@ -103,6 +103,11 @@ interface PosContextType {
   exportDatabaseJSON: () => void;
   importDatabaseJSON: (jsonString: string) => boolean;
   resetToDefaults: () => void;
+
+  // Real-time Multi-Device Sync
+  syncStatus: 'synced' | 'syncing' | 'offline' | 'error';
+  lastSyncTime: number | null;
+  syncNow: () => Promise<void>;
 }
 
 const PosContext = createContext<PosContextType | undefined>(undefined);
@@ -149,17 +154,274 @@ export const PosProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return found || staffList[0] || initialStaff[0];
   });
 
-  // Sync state to LocalStorage
-  useEffect(() => { localStorage.setItem(STORAGE_KEYS.PRODUCTS, JSON.stringify(products)); }, [products]);
-  useEffect(() => { localStorage.setItem(STORAGE_KEYS.CUSTOMERS, JSON.stringify(customers)); }, [customers]);
-  useEffect(() => { localStorage.setItem(STORAGE_KEYS.SUPPLIERS, JSON.stringify(suppliers)); }, [suppliers]);
-  useEffect(() => { localStorage.setItem(STORAGE_KEYS.SALES, JSON.stringify(sales)); }, [sales]);
-  useEffect(() => { localStorage.setItem(STORAGE_KEYS.EXPENSES, JSON.stringify(incomeExpenses)); }, [incomeExpenses]);
-  useEffect(() => { localStorage.setItem(STORAGE_KEYS.STOCK_MOVEMENTS, JSON.stringify(stockMovements)); }, [stockMovements]);
-  useEffect(() => { localStorage.setItem(STORAGE_KEYS.STAFF, JSON.stringify(staffList)); }, [staffList]);
-  useEffect(() => { localStorage.setItem(STORAGE_KEYS.SETTINGS, JSON.stringify(settings)); }, [settings]);
-  useEffect(() => { localStorage.setItem(STORAGE_KEYS.AUDIT, JSON.stringify(auditLogs)); }, [auditLogs]);
-  useEffect(() => { localStorage.setItem(STORAGE_KEYS.CURRENT_USER_ID, currentUser.id); }, [currentUser]);
+  // Safe Storage persistence with quota overflow protection and image auto-downscaling
+  const safeSaveState = (key: string, data: any) => {
+    try {
+      localStorage.setItem(key, JSON.stringify(data));
+    } catch (e: any) {
+      console.warn(`LocalStorage quota error on key ${key}:`, e);
+      if (key === STORAGE_KEYS.PRODUCTS && Array.isArray(data)) {
+        try {
+          // If quota is exceeded (e.g. photos captured on mobile phone),
+          // strip heavy base64 strings so product records (name, code, price, stock, units) are ALWAYS preserved!
+          const compact = data.map((item: Product) => {
+            if (item.imageUrl && item.imageUrl.startsWith('data:') && item.imageUrl.length > 25000) {
+              return { ...item, imageUrl: '' };
+            }
+            return item;
+          });
+          localStorage.setItem(key, JSON.stringify(compact));
+          console.info('Safely saved products by trimming oversized image payload.');
+        } catch (innerErr) {
+          console.error('Critical quota failure in PosContext:', innerErr);
+        }
+      }
+    }
+  };
+
+  // Real-Time Multi-Device Sync State
+  const [syncStatus, setSyncStatus] = useState<'synced' | 'syncing' | 'offline' | 'error'>('synced');
+  const [lastSyncTime, setLastSyncTime] = useState<number | null>(() => Date.now());
+  const deviceIdRef = useRef<string>('');
+  const lastServerTimestampRef = useRef<number>(0);
+  const isRemoteUpdateRef = useRef<boolean>(false);
+  const isSyncingInFlightRef = useRef<boolean>(false);
+
+  // Initialize unique device id
+  useEffect(() => {
+    try {
+      let id = sessionStorage.getItem('laopos_device_id');
+      if (!id) {
+        id = `dev_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+        sessionStorage.setItem('laopos_device_id', id);
+      }
+      deviceIdRef.current = id;
+    } catch {
+      deviceIdRef.current = `dev_${Date.now()}`;
+    }
+  }, []);
+
+  // Fetch full sync from server
+  const fetchServerSync = async (silent = false) => {
+    if (isSyncingInFlightRef.current) return;
+    try {
+      if (!silent) setSyncStatus('syncing');
+      isSyncingInFlightRef.current = true;
+      const res = await fetch('/api/sync');
+      if (!res.ok) throw new Error(`HTTP error ${res.status}`);
+      const json = await res.json();
+      if (json && json.success && json.data) {
+        if (json.lastUpdated > lastServerTimestampRef.current) {
+          lastServerTimestampRef.current = json.lastUpdated;
+          isRemoteUpdateRef.current = true;
+          const d = json.data;
+          if (Array.isArray(d.products)) setProducts(d.products);
+          if (Array.isArray(d.customers)) setCustomers(d.customers);
+          if (Array.isArray(d.suppliers)) setSuppliers(d.suppliers);
+          if (Array.isArray(d.sales)) setSales(d.sales);
+          if (Array.isArray(d.incomeExpenses)) setIncomeExpenses(d.incomeExpenses);
+          if (Array.isArray(d.stockMovements)) setStockMovements(d.stockMovements);
+          if (Array.isArray(d.staffList)) setStaffList(d.staffList);
+          if (d.settings) setSettings(d.settings);
+          if (Array.isArray(d.auditLogs)) setAuditLogs(d.auditLogs);
+          setTimeout(() => { isRemoteUpdateRef.current = false; }, 200);
+        }
+        setSyncStatus('synced');
+        setLastSyncTime(Date.now());
+      }
+    } catch (err) {
+      if (!silent) console.warn('Server sync offline, fallback to local-first storage:', err);
+      setSyncStatus('offline');
+    } finally {
+      isSyncingInFlightRef.current = false;
+    }
+  };
+
+  // Push updates to server so all phones and desktops stay synchronized
+  const pushServerSync = async (payload: Record<string, any>) => {
+    try {
+      setSyncStatus('syncing');
+      const res = await fetch('/api/sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ...payload,
+          sourceDevice: deviceIdRef.current,
+        }),
+      });
+      if (res.ok) {
+        const json = await res.json();
+        if (json.lastUpdated) {
+          lastServerTimestampRef.current = json.lastUpdated;
+        }
+        setSyncStatus('synced');
+        setLastSyncTime(Date.now());
+      } else {
+        setSyncStatus('offline');
+      }
+    } catch (err) {
+      console.warn('Network push error, safely saved to local device:', err);
+      setSyncStatus('offline');
+    }
+  };
+
+  const syncNow = async () => {
+    await fetchServerSync(false);
+  };
+
+  // Real-time SSE Connection + Periodic Fallback Polling (Every 4 seconds)
+  useEffect(() => {
+    fetchServerSync(true);
+
+    let eventSource: EventSource | null = null;
+    let reconnectTimeout: any = null;
+
+    const connectSse = () => {
+      try {
+        eventSource = new EventSource('/api/sync/events');
+
+        eventSource.onopen = () => {
+          setSyncStatus('synced');
+        };
+
+        eventSource.addEventListener('connected', (e: any) => {
+          try {
+            const data = JSON.parse(e.data);
+            if (data.lastUpdated && data.lastUpdated > lastServerTimestampRef.current) {
+              fetchServerSync(true);
+            }
+          } catch {}
+        });
+
+        eventSource.addEventListener('sync_update', (e: any) => {
+          try {
+            const msg = JSON.parse(e.data);
+            // Skip own device echo
+            if (msg.source === deviceIdRef.current) return;
+            if (msg.data) {
+              lastServerTimestampRef.current = msg.lastUpdated || Date.now();
+              isRemoteUpdateRef.current = true;
+              const d = msg.data;
+              if (Array.isArray(d.products)) setProducts(d.products);
+              if (Array.isArray(d.customers)) setCustomers(d.customers);
+              if (Array.isArray(d.suppliers)) setSuppliers(d.suppliers);
+              if (Array.isArray(d.sales)) setSales(d.sales);
+              if (Array.isArray(d.incomeExpenses)) setIncomeExpenses(d.incomeExpenses);
+              if (Array.isArray(d.stockMovements)) setStockMovements(d.stockMovements);
+              if (Array.isArray(d.staffList)) setStaffList(d.staffList);
+              if (d.settings) setSettings(d.settings);
+              if (Array.isArray(d.auditLogs)) setAuditLogs(d.auditLogs);
+              setSyncStatus('synced');
+              setLastSyncTime(Date.now());
+              setTimeout(() => { isRemoteUpdateRef.current = false; }, 200);
+            }
+          } catch (err) {
+            console.error('Error handling sync_update event:', err);
+          }
+        });
+
+        eventSource.addEventListener('product_updated', (e: any) => {
+          try {
+            const msg = JSON.parse(e.data);
+            if (Array.isArray(msg.allProducts)) {
+              lastServerTimestampRef.current = msg.lastUpdated || Date.now();
+              isRemoteUpdateRef.current = true;
+              setProducts(msg.allProducts);
+              setSyncStatus('synced');
+              setLastSyncTime(Date.now());
+              setTimeout(() => { isRemoteUpdateRef.current = false; }, 200);
+            }
+          } catch {}
+        });
+
+        eventSource.addEventListener('product_deleted', (e: any) => {
+          try {
+            const msg = JSON.parse(e.data);
+            if (Array.isArray(msg.allProducts)) {
+              lastServerTimestampRef.current = msg.lastUpdated || Date.now();
+              isRemoteUpdateRef.current = true;
+              setProducts(msg.allProducts);
+              setSyncStatus('synced');
+              setLastSyncTime(Date.now());
+              setTimeout(() => { isRemoteUpdateRef.current = false; }, 200);
+            }
+          } catch {}
+        });
+
+        eventSource.onerror = () => {
+          if (eventSource) {
+            eventSource.close();
+            eventSource = null;
+          }
+          reconnectTimeout = setTimeout(connectSse, 3500);
+        };
+      } catch (e) {
+        reconnectTimeout = setTimeout(connectSse, 5000);
+      }
+    };
+
+    connectSse();
+
+    // Fallback polling for mobile background wake-up
+    const pollTimer = setInterval(() => {
+      fetchServerSync(true);
+    }, 4000);
+
+    return () => {
+      if (eventSource) eventSource.close();
+      if (reconnectTimeout) clearTimeout(reconnectTimeout);
+      clearInterval(pollTimer);
+    };
+  }, []);
+
+  // Sync state to LocalStorage safely
+  useEffect(() => { safeSaveState(STORAGE_KEYS.PRODUCTS, products); }, [products]);
+  useEffect(() => { safeSaveState(STORAGE_KEYS.CUSTOMERS, customers); }, [customers]);
+  useEffect(() => { safeSaveState(STORAGE_KEYS.SUPPLIERS, suppliers); }, [suppliers]);
+  useEffect(() => { safeSaveState(STORAGE_KEYS.SALES, sales); }, [sales]);
+  useEffect(() => { safeSaveState(STORAGE_KEYS.EXPENSES, incomeExpenses); }, [incomeExpenses]);
+  useEffect(() => { safeSaveState(STORAGE_KEYS.STOCK_MOVEMENTS, stockMovements); }, [stockMovements]);
+  useEffect(() => { safeSaveState(STORAGE_KEYS.STAFF, staffList); }, [staffList]);
+  useEffect(() => { safeSaveState(STORAGE_KEYS.SETTINGS, settings); }, [settings]);
+  useEffect(() => { safeSaveState(STORAGE_KEYS.AUDIT, auditLogs); }, [auditLogs]);
+  useEffect(() => {
+    try {
+      localStorage.setItem(STORAGE_KEYS.CURRENT_USER_ID, currentUser.id);
+    } catch (e) {
+      console.warn('Could not save current user id', e);
+    }
+  }, [currentUser]);
+
+  // Push local user changes to server (debounced so rapid typing doesn't spam)
+  useEffect(() => {
+    if (isRemoteUpdateRef.current) return;
+    const t = setTimeout(() => {
+      pushServerSync({ products });
+    }, 400);
+    return () => clearTimeout(t);
+  }, [products]);
+
+  useEffect(() => {
+    if (isRemoteUpdateRef.current) return;
+    const t = setTimeout(() => {
+      pushServerSync({ sales, stockMovements, customers, suppliers, incomeExpenses });
+    }, 600);
+    return () => clearTimeout(t);
+  }, [sales, stockMovements, customers, suppliers, incomeExpenses]);
+
+  // Sync across tabs/windows on the same device
+  useEffect(() => {
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === STORAGE_KEYS.PRODUCTS && e.newValue) {
+        try {
+          const fresh = JSON.parse(e.newValue);
+          if (Array.isArray(fresh)) setProducts(fresh);
+        } catch {}
+      }
+    };
+    window.addEventListener('storage', handleStorageChange);
+    return () => window.removeEventListener('storage', handleStorageChange);
+  }, []);
 
   // Audit logger
   const logAudit = (action: string, target: string, details: string) => {
@@ -198,34 +460,45 @@ export const PosProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   // Product Actions
-  const addProduct = (prodData: Omit<Product, 'id' | 'createdAt' | 'updatedAt'>) => {
+  const addProduct = (prodData: Omit<Product, 'id' | 'createdAt' | 'updatedAt'>): Product => {
     const newProduct: Product = {
       ...prodData,
-      id: `prod-${Date.now()}`,
+      id: `prod-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
-    setProducts((prev) => [newProduct, ...prev]);
+    setProducts((prev) => {
+      const updated = [newProduct, ...prev];
+      // Immediately write to storage to guarantee persistence across mobile page navigation
+      safeSaveState(STORAGE_KEYS.PRODUCTS, updated);
+      return updated;
+    });
     logAudit('ເພີ່ມສິນຄ້າໃໝ່ (Create Product)', newProduct.code, `ເພີ່ມສິນຄ້າ: ${newProduct.name}`);
+    return newProduct;
   };
 
   const updateProduct = (id: string, updates: Partial<Product>) => {
-    setProducts((prev) =>
-      prev.map((p) => {
+    setProducts((prev) => {
+      const updated = prev.map((p) => {
         if (p.id === id) {
-          const updated = { ...p, ...updates, updatedAt: new Date().toISOString() };
-          return updated;
+          return { ...p, ...updates, updatedAt: new Date().toISOString() };
         }
         return p;
-      })
-    );
+      });
+      safeSaveState(STORAGE_KEYS.PRODUCTS, updated);
+      return updated;
+    });
     const prod = products.find((p) => p.id === id);
     logAudit('ແກ້ໄຂສິນຄ້າ (Edit Product)', prod?.code || id, `ອັບເດດຂໍ້ມູນສິນຄ້າ ${prod?.name || ''}`);
   };
 
   const deleteProduct = (id: string): boolean => {
     const prod = products.find((p) => p.id === id);
-    setProducts((prev) => prev.filter((p) => p.id !== id));
+    setProducts((prev) => {
+      const updated = prev.filter((p) => p.id !== id);
+      safeSaveState(STORAGE_KEYS.PRODUCTS, updated);
+      return updated;
+    });
     logAudit('ລຶບສິນຄ້າ (Delete Product)', prod?.code || id, `ລຶບສິນຄ້າ ${prod?.name || ''}`);
     return true;
   };
@@ -724,6 +997,11 @@ export const PosProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const matched = staffList.find((s) => s.pin === pin && s.active);
     if (matched) {
       setCurrentUser(matched);
+      try {
+        localStorage.setItem(STORAGE_KEYS.CURRENT_USER_ID, matched.id);
+      } catch (e) {
+        console.error(e);
+      }
       logAudit('ເຂົ້າສູ່ລະບົບດ້ວຍ PIN', matched.name, `ບົດບາດ: ${matched.role}`);
       return true;
     }
@@ -732,6 +1010,11 @@ export const PosProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const setCurrentUserDirectly = (user: StaffUser) => {
     setCurrentUser(user);
+    try {
+      localStorage.setItem(STORAGE_KEYS.CURRENT_USER_ID, user.id);
+    } catch (e) {
+      console.error(e);
+    }
     logAudit('ປ່ຽນຜູ້ໃຊ້ງານ', user.name, `ບົດບາດ: ${user.role}`);
   };
 
@@ -861,6 +1144,9 @@ export const PosProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         exportDatabaseJSON,
         importDatabaseJSON,
         resetToDefaults,
+        syncStatus,
+        lastSyncTime,
+        syncNow,
       }}
     >
       {children}

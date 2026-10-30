@@ -34,6 +34,7 @@ export const RetailPos: React.FC = () => {
     customers,
     currentUser,
     settings,
+    addProduct,
     completeSale,
     formatMoney,
   } = usePos();
@@ -57,6 +58,19 @@ export const RetailPos: React.FC = () => {
   const [completedSale, setCompletedSale] = useState<SaleOrder | null>(null);
   const [barcodeInput, setBarcodeInput] = useState<string>('');
   const [isCameraScannerOpen, setIsCameraScannerOpen] = useState<boolean>(false);
+
+  // Quick Add Product when barcode scanned is not in system
+  const [unmatchedBarcode, setUnmatchedBarcode] = useState<string | null>(null);
+  const [showQuickAddModal, setShowQuickAddModal] = useState<boolean>(false);
+  const [quickAddForm, setQuickAddForm] = useState({
+    name: '',
+    barcode: '',
+    category: 'ທົ່ວໄປ',
+    retailPrice: 10000,
+    wholesalePrice: 8500,
+    stockQty: 20,
+    baseUnit: 'ອັນ',
+  });
 
   const barcodeInputRef = useRef<HTMLInputElement>(null);
 
@@ -202,7 +216,18 @@ export const RetailPos: React.FC = () => {
       addToCart(found, matchedUnit?.name);
       setBarcodeInput('');
     } else {
-      alert(`ບໍ່ພົບສິນຄ້າທີ່ມີບາໂຄດ: ${code}`);
+      setUnmatchedBarcode(code);
+      setQuickAddForm({
+        name: '',
+        barcode: code,
+        category: 'ທົ່ວໄປ',
+        retailPrice: 10000,
+        wholesalePrice: 8500,
+        stockQty: 20,
+        baseUnit: 'ອັນ',
+      });
+      setShowQuickAddModal(true);
+      setBarcodeInput('');
     }
   };
 
@@ -219,7 +244,58 @@ export const RetailPos: React.FC = () => {
       const matchedUnit = found.units.find((u) => u.barcode === cleanCode);
       addToCart(found, matchedUnit?.name);
     } else {
-      alert(`ບໍ່ພົບສິນຄ້າໃນລະບົບ: ${cleanCode}`);
+      setUnmatchedBarcode(cleanCode);
+      setQuickAddForm({
+        name: '',
+        barcode: cleanCode,
+        category: 'ທົ່ວໄປ',
+        retailPrice: 10000,
+        wholesalePrice: 8500,
+        stockQty: 20,
+        baseUnit: 'ອັນ',
+      });
+      setShowQuickAddModal(true);
+    }
+  };
+
+  // Submit Quick Add Product directly from POS
+  const handleQuickAddProduct = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!quickAddForm.name.trim()) {
+      alert('ກະລຸນາປ້ອນຊື່ສິນຄ້າ');
+      return;
+    }
+
+    try {
+      const newProd = addProduct({
+        code: `PROD-${Math.floor(1000 + Math.random() * 9000)}`,
+        barcode: quickAddForm.barcode,
+        name: quickAddForm.name.trim(),
+        category: quickAddForm.category || 'ທົ່ວໄປ',
+        baseUnit: quickAddForm.baseUnit || 'ອັນ',
+        costPrice: Math.round(quickAddForm.retailPrice * 0.75),
+        retailPrice: quickAddForm.retailPrice,
+        wholesalePrice: quickAddForm.wholesalePrice,
+        wholesaleMinQty: 5,
+        stockQty: quickAddForm.stockQty,
+        minStockAlert: 5,
+        units: [
+          {
+            name: quickAddForm.baseUnit || 'ອັນ',
+            factor: 1,
+            retailPrice: quickAddForm.retailPrice,
+            wholesalePrice: quickAddForm.wholesalePrice,
+            isBase: true,
+          },
+        ],
+        volumePrices: [],
+      });
+
+      addToCart(newProd);
+      setShowQuickAddModal(false);
+      setUnmatchedBarcode(null);
+    } catch (err: any) {
+      alert('ເກີດຂໍ້ຜິດພາດ: ' + (err.message || 'ບໍ່ສາມາດເພີ່ມສິນຄ້າໄດ້'));
     }
   };
 
@@ -1112,6 +1188,142 @@ export const RetailPos: React.FC = () => {
           formatMoney={formatMoney}
           onClose={() => setCompletedSale(null)}
         />
+      )}
+
+      {/* Quick Add Product Modal when barcode not found */}
+      {showQuickAddModal && (
+        <div className="fixed inset-0 z-50 bg-black/65 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden flex flex-col text-slate-800 animate-in fade-in zoom-in-95 duration-150">
+            <div className="p-4 bg-slate-900 text-white flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Plus className="w-5 h-5 text-emerald-400" />
+                <div>
+                  <h3 className="font-bold text-sm">ເພີ່ມສິນຄ້າໃໝ່ດ່ວນ (Quick Add)</h3>
+                  <p className="text-[10px] text-slate-400">ສິນຄ້າບໍ່ທັນມີໃນລະບົບ - ໃສ່ຂໍ້ມູນແລ້ວຂາຍໄດ້ທັນທີ</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowQuickAddModal(false)}
+                className="p-1 text-slate-400 hover:text-white rounded-lg cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleQuickAddProduct} className="p-4 space-y-3">
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  ລະຫັດບາໂຄດ
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={quickAddForm.barcode}
+                  onChange={(e) => setQuickAddForm({ ...quickAddForm, barcode: e.target.value })}
+                  className="w-full text-xs font-mono font-bold px-3 py-2 border border-slate-300 rounded-xl bg-slate-50 text-slate-800"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  ຊື່ສິນຄ້າ *
+                </label>
+                <input
+                  type="text"
+                  required
+                  autoFocus
+                  placeholder="ເຊັ່ນ: ເຂົ້າໜົມ, ນ້ຳຫວານ, ຢາ..."
+                  value={quickAddForm.name}
+                  onChange={(e) => setQuickAddForm({ ...quickAddForm, name: e.target.value })}
+                  className="w-full text-xs px-3 py-2 border border-slate-300 rounded-xl font-medium focus:ring-1 focus:ring-emerald-500"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-2.5">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">
+                    ໝວດໝູ່
+                  </label>
+                  <input
+                    type="text"
+                    value={quickAddForm.category}
+                    onChange={(e) => setQuickAddForm({ ...quickAddForm, category: e.target.value })}
+                    className="w-full text-xs px-3 py-2 border border-slate-300 rounded-xl"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">
+                    ໜ່ວຍນັບ
+                  </label>
+                  <input
+                    type="text"
+                    value={quickAddForm.baseUnit}
+                    onChange={(e) => setQuickAddForm({ ...quickAddForm, baseUnit: e.target.value })}
+                    placeholder="ອັນ, ຂວດ, ຖົງ..."
+                    className="w-full text-xs px-3 py-2 border border-slate-300 rounded-xl"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2.5 bg-slate-50 p-2.5 rounded-xl border border-slate-200">
+                <div>
+                  <label className="block text-[11px] font-semibold text-emerald-700 mb-1">
+                    ລາຄາຂາຍຍ່ອຍ (KIP) *
+                  </label>
+                  <input
+                    type="number"
+                    required
+                    value={quickAddForm.retailPrice}
+                    onChange={(e) => setQuickAddForm({ ...quickAddForm, retailPrice: Number(e.target.value) || 0 })}
+                    className="w-full text-xs font-bold text-emerald-800 px-3 py-1.5 border border-emerald-300 rounded-lg text-right font-mono"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-semibold text-indigo-700 mb-1">
+                    ລາຄາຂາຍສົ່ງ (KIP)
+                  </label>
+                  <input
+                    type="number"
+                    value={quickAddForm.wholesalePrice}
+                    onChange={(e) => setQuickAddForm({ ...quickAddForm, wholesalePrice: Number(e.target.value) || 0 })}
+                    className="w-full text-xs font-bold text-indigo-800 px-3 py-1.5 border border-indigo-300 rounded-lg text-right font-mono"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  ຈຳນວນສະຕັອກເບື້ອງຕົ້ນ ({quickAddForm.baseUnit})
+                </label>
+                <input
+                  type="number"
+                  min="1"
+                  value={quickAddForm.stockQty}
+                  onChange={(e) => setQuickAddForm({ ...quickAddForm, stockQty: Number(e.target.value) || 1 })}
+                  className="w-full text-xs font-bold px-3 py-2 border border-slate-300 rounded-xl text-right font-mono"
+                />
+              </div>
+
+              <div className="pt-2 flex items-center justify-end gap-2 border-t border-slate-200">
+                <button
+                  type="button"
+                  onClick={() => setShowQuickAddModal(false)}
+                  className="px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-xl cursor-pointer"
+                >
+                  ຍົກເລີກ
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs rounded-xl shadow-sm flex items-center gap-1.5 cursor-pointer active:scale-95 transition-all"
+                >
+                  <CheckCircle className="w-4 h-4" />
+                  <span>ບັນທຶກ & ເພີ່ມໃສ່ກະຕ່າ</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
       )}
 
       {/* Barcode Camera Scanner Modal */}

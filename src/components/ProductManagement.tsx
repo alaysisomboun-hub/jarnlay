@@ -79,6 +79,7 @@ export const ProductManagement: React.FC = () => {
   const [editingProductId, setEditingProductId] = useState<string | null>(null);
   const [isCameraOpen, setIsCameraOpen] = useState(false);
   const [cameraTarget, setCameraTarget] = useState<'search' | 'form'>('search');
+  const [successToast, setSuccessToast] = useState<string | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const imageFileInputRef = useRef<HTMLInputElement>(null);
@@ -96,8 +97,8 @@ export const ProductManagement: React.FC = () => {
     retailPrice: 0,
     wholesalePrice: 0,
     wholesaleMinQty: 1,
-    stockQty: 0,
-    minStockAlert: 10,
+    stockQty: 20, // Default to 20 so new products can immediately be sold in POS without being blocked
+    minStockAlert: 5,
     units: [{ name: 'ອັນ', factor: 1, retailPrice: 0, wholesalePrice: 0, isBase: true }],
     volumePrices: [],
   };
@@ -222,12 +223,12 @@ export const ProductManagement: React.FC = () => {
     const reader = new FileReader();
     reader.onload = (event) => {
       const rawData = event.target?.result as string;
-      // Compress to prevent exceeding localStorage size limits while keeping sharp resolution
+      // Aggressive compression for mobile: 320px square thumbnail @ 0.65 quality produces tiny ~15KB data URLs
       const img = new window.Image();
       img.src = rawData;
       img.onload = () => {
         const canvas = document.createElement('canvas');
-        const MAX_DIM = 600;
+        const MAX_DIM = 320;
         let width = img.width;
         let height = img.height;
         if (width > height) {
@@ -246,7 +247,7 @@ export const ProductManagement: React.FC = () => {
         const ctx = canvas.getContext('2d');
         if (ctx) {
           ctx.drawImage(img, 0, 0, width, height);
-          const compressed = canvas.toDataURL('image/jpeg', 0.85);
+          const compressed = canvas.toDataURL('image/jpeg', 0.65);
           setFormData((prev) => ({ ...prev, imageUrl: compressed }));
         } else {
           setFormData((prev) => ({ ...prev, imageUrl: rawData }));
@@ -262,20 +263,35 @@ export const ProductManagement: React.FC = () => {
     e.target.value = '';
   };
 
-  // Save product
-  const handleSaveProduct = (e: React.FormEvent) => {
-    e.preventDefault();
+  // Save product with feedback and guaranteed storage write
+  const handleSaveProduct = (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+
     if (!formData.name.trim() || !formData.code.trim()) {
       alert('ກະລຸນາປ້ອນຊື່ສິນຄ້າ ແລະ ລະຫັດສິນຄ້າ!');
       return;
     }
 
-    if (editingProductId) {
-      updateProduct(editingProductId, formData);
-    } else {
-      addProduct(formData);
+    try {
+      const savedName = formData.name.trim();
+      if (editingProductId) {
+        updateProduct(editingProductId, formData);
+        setSuccessToast(`✓ ແກ້ໄຂສິນຄ້າ "${savedName}" ສຳເລັດແລ້ວ!`);
+      } else {
+        addProduct(formData);
+        setSuccessToast(`✓ ເພີ່ມສິນຄ້າ "${savedName}" ເຂົ້າລະບົບສຳເລັດແລ້ວ!`);
+      }
+
+      // Haptic feedback
+      if (typeof window !== 'undefined' && 'navigator' in window && navigator.vibrate) {
+        navigator.vibrate([40, 40, 40]);
+      }
+
+      setIsModalOpen(false);
+      setTimeout(() => setSuccessToast(null), 4000);
+    } catch (err: any) {
+      alert('ເກີດຂໍ້ຜິດພາດໃນການບັນທຶກ: ' + (err.message || 'ກະລຸນາລອງໃໝ່'));
     }
-    setIsModalOpen(false);
   };
 
   // Delete product
@@ -636,26 +652,46 @@ export const ProductManagement: React.FC = () => {
         </div>
       </div>
 
+      {/* Toast Notification */}
+      {successToast && (
+        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 bg-emerald-600 text-white px-5 py-3 rounded-2xl shadow-xl flex items-center gap-2 font-bold text-xs sm:text-sm animate-in fade-in slide-in-from-top-4 duration-200">
+          <CheckCircle className="w-5 h-5 text-white shrink-0" />
+          <span>{successToast}</span>
+        </div>
+      )}
+
       {/* ADD / EDIT PRODUCT MODAL */}
       {isModalOpen && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-hidden flex flex-col">
-            <div className="bg-slate-900 text-white p-4 flex items-center justify-between">
+        <div className="fixed inset-0 z-50 bg-black/65 backdrop-blur-xs flex sm:items-center sm:justify-center p-0 sm:p-4 overflow-hidden">
+          <div className="bg-white sm:rounded-2xl rounded-none shadow-2xl max-w-2xl w-full h-full sm:h-auto sm:max-h-[92vh] overflow-hidden flex flex-col">
+            <div className="bg-slate-900 text-white p-3.5 sm:p-4 flex items-center justify-between shrink-0 shadow-sm z-10">
               <div className="flex items-center gap-2">
                 <Package className="w-5 h-5 text-emerald-400" />
-                <h3 className="font-bold text-base">
+                <h3 className="font-bold text-sm sm:text-base">
                   {editingProductId ? 'ແກ້ໄຂຂໍ້ມູນສິນຄ້າ' : 'ເພີ່ມສິນຄ້າໃໝ່'}
                 </h3>
               </div>
-              <button
-                onClick={() => setIsModalOpen(false)}
-                className="p-1 text-slate-400 hover:text-white rounded-lg cursor-pointer"
-              >
-                <X className="w-5 h-5" />
-              </button>
+              <div className="flex items-center gap-2">
+                {/* Mobile Quick Save Button */}
+                <button
+                  type="button"
+                  onClick={() => handleSaveProduct()}
+                  className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs rounded-xl shadow-sm flex items-center gap-1.5 cursor-pointer active:scale-95 transition-all"
+                >
+                  <CheckCircle className="w-3.5 h-3.5" />
+                  <span>ບັນທຶກ</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setIsModalOpen(false)}
+                  className="p-1.5 text-slate-400 hover:text-white rounded-lg cursor-pointer"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
             </div>
 
-            <form onSubmit={handleSaveProduct} className="p-6 overflow-y-auto space-y-4">
+            <form onSubmit={handleSaveProduct} className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4">
               {/* Row 1: Code, Barcode, Name */}
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div>
@@ -1191,25 +1227,26 @@ export const ProductManagement: React.FC = () => {
                   )}
                 </div>
               </div>
-
-              {/* Form Buttons */}
-              <div className="pt-3 border-t border-slate-200 flex justify-end gap-2">
-                <button
-                  type="button"
-                  onClick={() => setIsModalOpen(false)}
-                  className="px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-lg cursor-pointer"
-                >
-                  ຍົກເລີກ
-                </button>
-                <button
-                  type="submit"
-                  className="px-6 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs rounded-lg shadow-sm flex items-center gap-1.5 cursor-pointer"
-                >
-                  <CheckCircle className="w-4 h-4" />
-                  ບັນທຶກສິນຄ້າ
-                </button>
-              </div>
             </form>
+
+            {/* Sticky Bottom Action Bar for Mobile & Desktop */}
+            <div className="p-3 sm:p-4 border-t border-slate-200 bg-white/95 backdrop-blur-sm shrink-0 flex items-center justify-between gap-3 shadow-lg z-10">
+              <button
+                type="button"
+                onClick={() => setIsModalOpen(false)}
+                className="px-4 py-2.5 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-xl cursor-pointer"
+              >
+                ຍົກເລີກ
+              </button>
+              <button
+                type="button"
+                onClick={() => handleSaveProduct()}
+                className="flex-1 sm:flex-none px-6 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs rounded-xl shadow-md flex items-center justify-center gap-2 cursor-pointer transition-all active:scale-95"
+              >
+                <CheckCircle className="w-4 h-4" />
+                <span>ບັນທຶກສິນຄ້າເຂົ້າລະບົບ</span>
+              </button>
+            </div>
           </div>
         </div>
       )}

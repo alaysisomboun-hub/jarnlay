@@ -1,5 +1,6 @@
 import React from 'react';
 import { usePos } from '../context/PosContext';
+import { hasMenuAccess, ROLE_DEFINITIONS, getAllowedMenus } from '../lib/rbac';
 import {
   LayoutDashboard,
   ShoppingCart,
@@ -16,12 +17,15 @@ import {
   ChevronRight,
   Store,
   LucideIcon,
+  Lock,
+  KeyRound,
 } from 'lucide-react';
 
 interface SidebarProps {
   activeTab: string;
   onSelectTab: (tab: string) => void;
   onOpenSettings: () => void;
+  onOpenSwitchUser?: () => void;
   isOpenMobile: boolean;
   onCloseMobile: () => void;
   isCollapsed?: boolean;
@@ -45,6 +49,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   activeTab,
   onSelectTab,
   onOpenSettings,
+  onOpenSwitchUser,
   isOpenMobile,
   onCloseMobile,
   isCollapsed = false,
@@ -154,6 +159,18 @@ export const Sidebar: React.FC<SidebarProps> = ({
     },
   ];
 
+  // RBAC: Filter menu groups to only show permitted items for the current user's role
+  const visibleMenuGroups = menuGroups
+    .map((group) => ({
+      ...group,
+      items: group.items.filter((item) => hasMenuAccess(currentUser, item.id)),
+    }))
+    .filter((group) => group.items.length > 0);
+
+  const canAccessSettings = hasMenuAccess(currentUser, 'settings');
+  const roleDef = ROLE_DEFINITIONS[currentUser?.role || 'cashier'];
+  const allowedMenusCount = getAllowedMenus(currentUser).length;
+
   return (
     <>
       {/* Mobile Backdrop */}
@@ -208,9 +225,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
             )}
           </div>
 
-          {/* Grouped Navigation Items */}
+          {/* Grouped Navigation Items (Filtered by RBAC) */}
           <nav className="flex-1 p-2.5 space-y-4 overflow-y-auto scrollbar-none">
-            {menuGroups.map((group, groupIdx) => (
+            {visibleMenuGroups.map((group, groupIdx) => (
               <div key={groupIdx} className="space-y-1">
                 {/* Section Header */}
                 {!isCollapsed ? (
@@ -288,48 +305,93 @@ export const Sidebar: React.FC<SidebarProps> = ({
         </div>
 
         {/* Bottom User & Settings */}
-        <div className="p-2.5 border-t border-slate-800 bg-slate-950/40 space-y-1">
-          <button
-            onClick={() => {
-              onOpenSettings();
-              onCloseMobile();
-            }}
-            title={isCollapsed ? 'ຕັ້ງຄ່າລະບົບ (Settings)' : undefined}
-            className={`w-full flex items-center ${
-              isCollapsed ? 'justify-center p-2' : 'gap-2.5 px-3 py-2'
-            } rounded-xl text-xs font-medium text-slate-300 hover:bg-slate-800 hover:text-white transition-colors cursor-pointer group relative`}
-          >
-            <Settings className="w-4 h-4 text-slate-400 group-hover:rotate-45 transition-transform shrink-0" />
-            {!isCollapsed && <span>ຕັ້ງຄ່າຮ້ານຄ້າ & ລະບົບ</span>}
-            {isCollapsed && (
-              <span className="hidden lg:group-hover:block absolute left-full ml-2 px-2.5 py-1 bg-slate-900 text-white text-[11px] rounded-lg shadow-xl whitespace-nowrap z-50 border border-slate-700 pointer-events-none">
-                ຕັ້ງຄ່າຮ້ານຄ້າ
-              </span>
-            )}
-          </button>
+        <div className="p-2.5 border-t border-slate-800 bg-slate-950/40 space-y-1.5">
+          {/* Settings button - conditionally rendered or locked based on RBAC */}
+          {canAccessSettings ? (
+            <button
+              onClick={() => {
+                onOpenSettings();
+                onCloseMobile();
+              }}
+              title={isCollapsed ? 'ຕັ້ງຄ່າລະບົບ (Settings)' : undefined}
+              className={`w-full flex items-center ${
+                isCollapsed ? 'justify-center p-2' : 'gap-2.5 px-3 py-2'
+              } rounded-xl text-xs font-medium text-slate-300 hover:bg-slate-800 hover:text-white transition-colors cursor-pointer group relative`}
+            >
+              <Settings className="w-4 h-4 text-slate-400 group-hover:rotate-45 transition-transform shrink-0" />
+              {!isCollapsed && <span>ຕັ້ງຄ່າຮ້ານຄ້າ & ລະບົບ</span>}
+              {isCollapsed && (
+                <span className="hidden lg:group-hover:block absolute left-full ml-2 px-2.5 py-1 bg-slate-900 text-white text-[11px] rounded-lg shadow-xl whitespace-nowrap z-50 border border-slate-700 pointer-events-none">
+                  ຕັ້ງຄ່າຮ້ານຄ້າ
+                </span>
+              )}
+            </button>
+          ) : (
+            !isCollapsed && (
+              <div
+                title="ສະເພາະ Admin ຫຼື ຜູ້ຈັດການ ທີ່ມີສິດເຂົ້າເຖິງການຕັ້ງຄ່າ"
+                className="flex items-center gap-2 px-3 py-1.5 rounded-xl text-[11px] text-slate-400 bg-slate-900/40 border border-slate-800/60"
+              >
+                <Lock className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                <span className="truncate">ຕັ້ງຄ່າຮ້ານ (ລັອກຕາມສິດ)</span>
+              </div>
+            )
+          )}
 
-          {/* Current Staff info */}
+          {/* Current Staff info & Quick PIN Switcher */}
           <div
+            onClick={onOpenSwitchUser}
+            title="ກົດເພື່ອປ່ຽນຜູ້ໃຊ້ງານ ຫຼື ປ້ອນລະຫັດ PIN"
             className={`flex items-center ${
               isCollapsed ? 'justify-center p-1.5' : 'justify-between px-3 py-2'
-            } text-xs border-t border-slate-800/80 pt-2`}
+            } text-xs border-t border-slate-800/80 pt-2 rounded-xl hover:bg-slate-800/60 transition-colors cursor-pointer group`}
           >
             {!isCollapsed ? (
-              <div className="truncate pr-2">
-                <p className="font-semibold text-white truncate text-[11px] flex items-center gap-1.5">
-                  <span className="w-2 h-2 rounded-full bg-emerald-500 inline-block shrink-0 animate-pulse"></span>
-                  {currentUser.name}
-                </p>
-                <p className="text-[10px] text-emerald-400 capitalize pl-3.5">
-                  {currentUser.role === 'admin' && 'ຜູ້ດູແລ (Admin)'}
-                  {currentUser.role === 'manager' && 'ຜູ້ຈັດການ (Manager)'}
-                  {currentUser.role === 'cashier' && 'ພະນັກງານຂາຍ (Cashier)'}
-                </p>
+              <div className="flex-1 truncate pr-2">
+                <div className="flex items-center justify-between">
+                  <p className="font-semibold text-white truncate text-[11px] flex items-center gap-1.5">
+                    <span className={`w-2 h-2 rounded-full ${roleDef?.dotColor || 'bg-emerald-500'} inline-block shrink-0 animate-pulse`}></span>
+                    {currentUser.name}
+                  </p>
+                  <KeyRound className="w-3 h-3 text-slate-400 group-hover:text-emerald-400 transition-colors shrink-0" />
+                </div>
+                <div className="flex items-center gap-1.5 mt-0.5">
+                  <span className={`text-[10px] font-semibold px-1.5 py-0.2 rounded-md ${
+                    currentUser.role === 'admin'
+                      ? 'bg-purple-900/40 text-purple-300 border border-purple-700/50'
+                      : currentUser.role === 'manager'
+                      ? 'bg-blue-900/40 text-blue-300 border border-blue-700/50'
+                      : currentUser.role === 'stock'
+                      ? 'bg-amber-900/40 text-amber-300 border border-amber-700/50'
+                      : currentUser.role === 'accountant'
+                      ? 'bg-cyan-900/40 text-cyan-300 border border-cyan-700/50'
+                      : 'bg-emerald-900/40 text-emerald-300 border border-emerald-700/50'
+                  }`}>
+                    {currentUser.role === 'admin' && 'Admin'}
+                    {currentUser.role === 'manager' && 'Manager'}
+                    {currentUser.role === 'cashier' && 'Cashier'}
+                    {currentUser.role === 'stock' && 'Stock'}
+                    {currentUser.role === 'accountant' && 'Accountant'}
+                  </span>
+                  <span className="text-[9px] text-slate-400">
+                    ({allowedMenusCount} ເມນູ)
+                  </span>
+                </div>
               </div>
             ) : (
               <div
-                title={`${currentUser.name} (${currentUser.role})`}
-                className="w-7 h-7 rounded-full bg-emerald-600 text-white flex items-center justify-center font-bold text-xs ring-2 ring-emerald-500/30"
+                title={`${currentUser.name} (${currentUser.role}) - ກົດເພື່ອປ່ຽນ PIN`}
+                className={`w-7 h-7 rounded-full flex items-center justify-center font-bold text-xs ring-2 ${
+                  currentUser.role === 'admin'
+                    ? 'bg-purple-600 text-white ring-purple-400/40'
+                    : currentUser.role === 'manager'
+                    ? 'bg-blue-600 text-white ring-blue-400/40'
+                    : currentUser.role === 'stock'
+                    ? 'bg-amber-600 text-white ring-amber-400/40'
+                    : currentUser.role === 'accountant'
+                    ? 'bg-cyan-600 text-white ring-cyan-400/40'
+                    : 'bg-emerald-600 text-white ring-emerald-400/40'
+                }`}
               >
                 {currentUser.name.slice(0, 1)}
               </div>
